@@ -1,5 +1,5 @@
 (defsystem braculon
-  :version "0.1"
+  :version "0.1.1"
   :author "Evgeny Ilyushkin"
   :license "MIT"
   :depends-on (:cl-ppcre
