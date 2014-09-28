@@ -2,7 +2,8 @@
   :version "0.1.1"
   :author "Evgeny Ilyushkin"
   :license "MIT"
-  :depends-on (:cl-ppcre
+  :depends-on (:alexandria
+	       :cl-ppcre
 	       :cl-who
 	       :trivial-timers
                :hunchentoot)

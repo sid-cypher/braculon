@@ -2,6 +2,10 @@
 
 (defpackage :braculon
   (:nicknames :brac)
-  (:use :cl :cl-ppcre :cl-who :hunchentoot)
+  (:use :cl :alexandria :cl-ppcre :cl-who :hunchentoot)
   (:export
-   #:launch))
+   #:wizard
+   #:launch
+   #:finish
+   #:show-running
+   #:state-report))
