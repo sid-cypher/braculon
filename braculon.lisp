@@ -18,7 +18,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (define-constant config-list-wrong-head
   "Config file must begin with a \"braculon-settings\" as the title or a parenthesised list." :test #'string=)
 
-(defvar *braculon-instances* '() "launched web projects with separate configs")
+(defvar *project-instances* '() "launched web projects with separate configs")
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
 (defmacro cat (&body bod)
@@ -34,7 +34,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
   ())
 (defclass braculon-state (state)
   ((name :reader name
-	 :initform 'give-me-a-name
+	 :initform "[unnamed]"
 	 :documentation "")
    (config-file :reader config-file
 		:initform nil
@@ -83,6 +83,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)
+  (declare (type string value))
   (setf (slot-value object 'name) value))
 (defun (setf ports) (value object)
   (setf (slot-value object 'ports) value))
@@ -93,21 +94,43 @@ filename-specifying form was found in the provided :config argument." :test #'st
     (if (not truepath) nil
 	(with-open-file (stream truepath)
 	  (read stream)))))
+(defun find-instance-by-conf-file (conf-filepath)
+  (find-if (lambda (tested-inst)
+	     (equal conf-filepath (config-file tested-inst))) *project-instances*))
+(defun find-instance-by-name (name)
+  (declare (type string name))
+    (find-if (lambda (tested-inst)
+	       (string= name (name tested-inst))) *project-instances*)))
 (defun wizard (&key config-file name ports) ;;TODO more keys
   "Interactively create a new web project."
   nil)
 (defun launch (config &key overwrite)
   (let ((obj (make-instance 'braculon-state :config config :overwrite overwrite)))
-    ;; TODO check if already launched
-    (when obj
-      (push obj *braculon-instances*)
+    ;; TODO somehow warn if already launched
+    (unless (or (not obj)
+		 (find-instance-by-conf-file (config-file obj))
+		 (find-instance-by-name (name obj)))
+      (push obj *project-instances*)
       (name obj))))
 (defun finish (project-id)
-  "Uses a name or a config file path of a launched project to finish it."
-  nil)
+  (declare (type (or string pathname) project-id))
+  "Uses a name or a config file path of a launched project to finish it. Return T if a project was found, NIL otherwise."
+  (let (found-by-name)
+    (cond ((fad:file-exists-p project-id)
+	   (when (find-instance-by-conf-file project-id)
+	     (setq *project-instances*
+		   (delete-if (lambda (tested-inst)
+				(equal project-id (config-file tested-inst))) *project-instances*))
+	     t))
+	  ((setq found-by-name (find-instance-by-name project-id))
+	   (setq *project-instances*
+		 (delete-if (lambda (tested-inst)
+			      (eq found-by-name tested-inst)) *project-instances*))
+	   (when found-by-name
+	     t)))))
 (defun show-running ()
   "Prints a list of running web projects."
-  (let ((namelist (mapcar #'name *braculon-instances*)))
+  (let ((namelist (mapcar #'name *project-instances*)))
     (format t "~{~A~%~}" namelist)
     ;; TODO: uptime
     namelist))
@@ -141,27 +164,30 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	  (t (error conf-file-error)))
     ;;fill our object with config data
     (with-slots (name config-file ports project-root static-content-path
-		 dynamic-content-path routes-path controllers-path
-		 views-path use-src src-path allow-read-eval config-print-case
-		 render-who-include-symbol) state
+		      dynamic-content-path routes-path controllers-path
+		      views-path use-src src-path allow-read-eval config-print-case
+		      render-who-include-symbol) state
       (setf rootpath (getf config-form :project-root))
-      (setf name (getf config-form :name)
+      (setf name (let ((raw-name (getf config-form :name)))
+		   (if (symbolp raw-name)
+		       (string-downcase (symbol-name raw-name))
+		       (format nil "~A" raw-name)))
 	    config-file config-path
 	    ports (getf config-form :ports)
 	    project-root (ensure-directories-exist rootpath)
 	    static-content-path (ensure-directories-exist (merge-pathnames
-				 (getf config-form :static-content-path) rootpath))
+							   (getf config-form :static-content-path) rootpath))
 	    dynamic-content-path (ensure-directories-exist (merge-pathnames
-				  (getf config-form :dynamic-content-path) rootpath))
+							    (getf config-form :dynamic-content-path) rootpath))
 	    routes-path (ensure-directories-exist (merge-pathnames
-			 (getf config-form :routes-path) rootpath))
+						   (getf config-form :routes-path) rootpath))
 	    controllers-path (ensure-directories-exist (merge-pathnames
-			      (getf config-form :controllers-path) rootpath))
+							(getf config-form :controllers-path) rootpath))
 	    views-path (ensure-directories-exist (merge-pathnames
-			(getf config-form :views-path) rootpath))
+						  (getf config-form :views-path) rootpath))
 	    use-src (getf config-form :use-src)
 	    src-path (ensure-directories-exist (merge-pathnames
-		      (getf config-form :src-path) rootpath))
+						(getf config-form :src-path) rootpath))
 	    allow-read-eval (getf config-form :allow-read-eval)
 	    config-print-case (getf config-form :config-print-case)
 	    render-who-include-symbol (getf config-form :render-who-include-symbol)))))

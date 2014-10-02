@@ -3,6 +3,7 @@
   :author "Evgeny Ilyushkin"
   :license "MIT"
   :depends-on (:alexandria
+	       :cl-fad
 	       :cl-ppcre
 	       :cl-who
 	       :trivial-timers
