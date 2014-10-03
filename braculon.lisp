@@ -100,7 +100,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (defun find-instance-by-name (name)
   (declare (type string name))
     (find-if (lambda (tested-inst)
-	       (string= name (name tested-inst))) *project-instances*)))
+	       (string= name (name tested-inst))) *project-instances*))
 (defun wizard (&key config-file name ports) ;;TODO more keys
   "Interactively create a new web project."
   nil)
