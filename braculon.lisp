@@ -32,6 +32,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 
 (defclass state ()
   ())
+
 (defclass braculon-state (state)
   ((name :reader name
 	 :initform "[unnamed]"
@@ -43,6 +44,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	  :initform '()
 	  :documentation "")
    (acceptors :reader acceptors
+	      :initform '()
 	      :documentation "")
    (project-root :reader project-root
 		 :initform nil
@@ -85,6 +87,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (defun (setf name) (value object)
   (declare (type string value))
   (setf (slot-value object 'name) value))
+
 (defun (setf ports) (value object)
   (setf (slot-value object 'ports) value))
 
@@ -104,6 +107,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (defun wizard (&key config-file name ports) ;;TODO more keys
   "Interactively create a new web project."
   nil)
+
 (defun launch (config &key overwrite)
   (let ((obj (make-instance 'braculon-state :config config :overwrite overwrite)))
     ;; TODO somehow warn if already launched
@@ -111,23 +115,42 @@ filename-specifying form was found in the provided :config argument." :test #'st
 		 (find-instance-by-conf-file (config-file obj))
 		 (find-instance-by-name (name obj)))
       (push obj *project-instances*)
+      (fill-acceptors obj)
       (name obj))))
+
 (defun finish (project-id)
+  "Uses a name or a config file path of a launched project to finish it.
+Return T if a project was found, NIL otherwise."
   (declare (type (or string pathname) project-id))
-  "Uses a name or a config file path of a launched project to finish it. Return T if a project was found, NIL otherwise."
-  (let (found-by-name)
-    (cond ((fad:file-exists-p project-id)
-	   (when (find-instance-by-conf-file project-id)
-	     (setq *project-instances*
-		   (delete-if (lambda (tested-inst)
-				(equal project-id (config-file tested-inst))) *project-instances*))
-	     t))
-	  ((setq found-by-name (find-instance-by-name project-id))
-	   (setq *project-instances*
-		 (delete-if (lambda (tested-inst)
-			      (eq found-by-name tested-inst)) *project-instances*))
-	   (when found-by-name
-	     t)))))
+  (let (found-project)
+    (setq found-project (if (fad:file-exists-p project-id)
+			    (find-instance-by-conf-file project-id)
+			    (find-instance-by-name project-id)))
+    (when found-project
+      (stop-acceptors found-project)
+      (setq *project-instances*
+	    (delete-if (lambda (tested-inst)
+			 (eq found-project tested-inst))
+		       *project-instances*))
+      t)))
+
+(defun fill-acceptors (project-state)
+  "Instantiate and start all acceptors in a project based on its PORTS config field."
+  (with-slots (ports acceptors static-content-path) project-state
+    (if acceptors (error "Will not fill non-empty ACCEPTORS field in BRACULON-STATE")
+	(dolist (port ports t)
+	  (push (hunchentoot:start (make-instance 'bracceptor
+				      :parent project-state
+				      :document-root static-content-path
+				      :port port))
+		acceptors)))))
+
+(defun stop-acceptors (project-state)
+  "Stop all acceptors in a project."
+  (with-slots (acceptors) project-state
+    (dotimes (i (length acceptors) t)
+      (hunchentoot:stop (pop acceptors)))))
+
 (defun show-running ()
   "Prints a list of running web projects."
   (let ((namelist (mapcar #'name *project-instances*)))
@@ -138,6 +161,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (defmethod print-object ((state braculon-state) stream)
   (print-unreadable-object (state stream :type t)
     (format stream "~A" (name state))))
+
 (defmethod initialize-instance :after ((state braculon-state) &key config overwrite)
   (let (config-form config-path rootpath)
     ;;make sure we have both config data and a file to keep it there.
@@ -168,6 +192,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 		      views-path use-src src-path allow-read-eval config-print-case
 		      render-who-include-symbol) state
       (setf rootpath (getf config-form :project-root))
+      ;; TODO: thoroughly check user inputs from config file
       (setf name (let ((raw-name (getf config-form :name)))
 		   (if (symbolp raw-name)
 		       (string-downcase (symbol-name raw-name))
@@ -197,5 +222,9 @@ filename-specifying form was found in the provided :config argument." :test #'st
 
 (defmethod state-report ((state braculon-state))
   ;;TODO
-  (format t "A report for ~A goes here." state))
+  (format t
+	  "Test report for ~A:~% Config file: ~A~% Acceptors: (~{~A~^ ~})~%"
+	  state
+	  (config-file state)
+	  (acceptors state)))
 
