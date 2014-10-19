@@ -2,26 +2,41 @@
 
 (in-package :braculon)
 
-(defclass bracceptor (hunchentoot:acceptor) ;; now else can i call it?
-  ((project-parent :reader project-parent
+(defclass brac-acceptor (hunchentoot:acceptor)
+  ((project-state :reader project-state
 		 :initarg :parent
 		 :initform (error "Please specify the project that will use this object.")
 		 :documentation ""))
   (:default-initargs
-   :request-class 'brequest))
+   :request-class 'brac-request))
 
-(defclass brequest (hunchentoot:request) ;; naming things is hard
+(defclass brac-request (hunchentoot:request)
   ())
 
+(defclass router-state ()
+  ((project-state :reader project-state
+		  :initarg :parent
+		  :initform (error "Please specify the project that will use this object.")
+		  :documentation "")
+   (callable :reader callable
+	     :initarg :callable
+	     :documentation "")
+   (source-file :reader source-file
+		:initarg :source-file
+		:documentation "")
+   (load-time :reader load-time
+	      :initarg :load-time
+	      :documentation "")))
+
 ;;; TODO: check interference between process requests
-(defvar *request-interference* nil) ;; only used in PROCESS-REQUEST
+(defvar *request-interference* nil)
 
 (defun start-output (return-code &optional (content nil content-provided-p))
   "Wrapper around Hunchentoot's"
   (if content-provided-p (hunchentoot::start-output return-code content)
       (hunchentoot::start-output return-code)))
 
-(defmethod process-request ((req brequest))
+(defmethod process-request ((req brac-request))
   "same as the Hunchentoot standard implementation, but with HANDLE-REQUEST
 replaced by ROUTE-REQUEST."
   (catch 'hunchentoot::request-processed ; maybe thrown in START-OUTPUT to end request processing
@@ -52,7 +67,7 @@ replaced by ROUTE-REQUEST."
 	      (report-error-to-client error backtrace))
 	    (handler-case
 		(hunchentoot::with-debugger
-		  (start-output (return-code *reply*)
+		  (start-output (return-code *reply*) ;; TODO: get rid of special var reply
 				(or contents
 				    (acceptor-status-message *acceptor*
 							     (return-code *reply*)))))
@@ -60,11 +75,11 @@ replaced by ROUTE-REQUEST."
 		;; error occurred while writing to the client.  attempt to report.
 		(report-error-to-client e)))))))))
 
-
 (defgeneric route-request (request)
   (:documentation "o hai, i send off reqs thru routing tubez"))
 
-(defmethod route-request ((req brequest))
+;;; TODO: Make HANDLE-STATIC-FILE into a controller.
+(defmethod route-request ((req brac-request))
   "Offers the request to registered routers until one of them accepts or all of
 them refuse. Also sets up standard error handling which catches any errors
 within the handler."
@@ -84,15 +99,9 @@ within the handler."
                     (when *log-lisp-warnings-p*
                       (log-message* *lisp-warnings-log-level* "~A" cond)))))
     (hunchentoot::with-debugger
-      ;; TODO replace with proper routing
-      ;;   router returns nil or controller name
-      (let ((path (and (static-content-path (project-parent (request-acceptor req)))
-		       (request-pathname req))))
-	(cond
-	  (path
-	   (hunchentoot::handle-static-file ; peek there
-	    (merge-pathnames (if (equal "/" (script-name req)) #p"index.html" path)
-			     path)))
-	  (t
-	   (setf (return-code *reply*) +http-not-found+)
-	   (hunchentoot::abort-request-handler)))))))
+      ;; ACCEPTOR-DISPATCH-REQUEST was here.
+      ;; TODO replace with file-based routing
+      ;;   routers return nil or controller name
+      ;;   call them in user-defined order, pass request to resulting controller.
+      ;; need own fallback instead of CALL-NEXT-METHOD
+      )))

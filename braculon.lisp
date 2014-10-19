@@ -21,19 +21,10 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (defvar *project-instances* '() "launched web projects with separate configs")
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
-(defmacro cat (&body bod)
-  "because 'concatenate strings' is too much to type"
-  `(concatenate 'string ,@bod))
-(defmacro silence (&body bod)
-  "mutes the stdout unless overridden"
-  `(let ((*standard-output* (make-broadcast-stream)))
-     ;;TODO: scan for *std-out* redefs in body.
-    ,@bod))
-
 (defclass state ()
   ())
 
-(defclass braculon-state (state)
+(defclass project-state (state)
   ((name :reader name
 	 :initform "[unnamed]"
 	 :documentation "")
@@ -46,6 +37,18 @@ filename-specifying form was found in the provided :config argument." :test #'st
    (acceptors :reader acceptors
 	      :initform '()
 	      :documentation "")
+   (routers :reader routers
+	    :initform '()
+	    :documentation "")
+   (routers-order :reader routers-order
+		  :initform '()
+		  :documentation "")
+   (controllers :reader controllers
+		:initform '()
+		:documentation "")
+   (views :reader views
+	  :initform '()
+	  :documentation "")
    (project-root :reader project-root
 		 :initform nil
 		 :documentation "")
@@ -58,7 +61,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
    (controllers-path :reader controllers-path
 		     :initform nil
 		     :documentation "")
-   (routes-path :reader routes-path
+   (routers-path :reader routers-path
 		:initform nil
 		:documentation "")
    (views-path :reader views-path
@@ -91,80 +94,8 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (defun (setf ports) (value object)
   (setf (slot-value object 'ports) value))
 
-(defun read-form-file (filepath)
-  (declare (type pathname filepath))
-  (let ((truepath (cl-fad:file-exists-p filepath)))
-    (if (not truepath) nil
-	(with-open-file (stream truepath)
-	  (read stream)))))
-(defun find-instance-by-conf-file (conf-filepath)
-  (find-if (lambda (tested-inst)
-	     (equal conf-filepath (config-file tested-inst))) *project-instances*))
-(defun find-instance-by-name (name)
-  (declare (type string name))
-    (find-if (lambda (tested-inst)
-	       (string= name (name tested-inst))) *project-instances*))
-(defun wizard (&key config-file name ports) ;;TODO more keys
-  "Interactively create a new web project."
-  nil)
-
-(defun launch (config &key overwrite)
-  (let ((obj (make-instance 'braculon-state :config config :overwrite overwrite)))
-    ;; TODO somehow warn if already launched
-    (unless (or (not obj)
-		 (find-instance-by-conf-file (config-file obj))
-		 (find-instance-by-name (name obj)))
-      (push obj *project-instances*)
-      (fill-acceptors obj)
-      (name obj))))
-
-(defun finish (project-id)
-  "Uses a name or a config file path of a launched project to finish it.
-Return T if a project was found, NIL otherwise."
-  (declare (type (or string pathname) project-id))
-  (let (found-project)
-    (setq found-project (if (fad:file-exists-p project-id)
-			    (find-instance-by-conf-file project-id)
-			    (find-instance-by-name project-id)))
-    (when found-project
-      (stop-acceptors found-project)
-      (setq *project-instances*
-	    (delete-if (lambda (tested-inst)
-			 (eq found-project tested-inst))
-		       *project-instances*))
-      t)))
-
-(defun fill-acceptors (project-state)
-  "Instantiate and start all acceptors in a project based on its PORTS config field."
-  (with-slots (ports acceptors static-content-path) project-state
-    (if acceptors (error "Will not fill non-empty ACCEPTORS field in BRACULON-STATE")
-	(dolist (port ports t)
-	  (push (hunchentoot:start (make-instance 'bracceptor
-				      :parent project-state
-				      :document-root static-content-path
-				      :port port))
-		acceptors)))))
-
-(defun stop-acceptors (project-state)
-  "Stop all acceptors in a project."
-  (with-slots (acceptors) project-state
-    (dotimes (i (length acceptors) t)
-      (hunchentoot:stop (pop acceptors)))))
-
-(defun show-running ()
-  "Prints a list of running web projects."
-  (let ((namelist (mapcar #'name *project-instances*)))
-    (format t "~{~A~%~}" namelist)
-    ;; TODO: uptime
-    namelist))
-
-(defmethod print-object ((state braculon-state) stream)
-  (print-unreadable-object (state stream :type t)
-    (format stream "~A" (name state))))
-
-(defmethod initialize-instance :after ((state braculon-state) &key config overwrite)
-  (let (config-form config-path rootpath)
-    ;;make sure we have both config data and a file to keep it there.
+(defun load-config-file-settings (config overwrite)
+  (let (config-form config-path)
     (cond ((pathnamep config)
 	   (setf config-path config)
 	   ;; TODO restarts for all the reader conditions
@@ -186,41 +117,128 @@ Return T if a project was found, NIL otherwise."
 					;TODO restart with overwrite
 	     (error file-exists)))
 	  (t (error conf-file-error)))
-    ;;fill our object with config data
-    (with-slots (name config-file ports project-root static-content-path
-		      dynamic-content-path routes-path controllers-path
-		      views-path use-src src-path allow-read-eval config-print-case
-		      render-who-include-symbol) state
+    (values config-form config-path)))
+
+
+(defun fill-slots-with-config-file-settings (config-form config-path project-state)
+  (with-slots (name config-file ports project-root static-content-path
+		    dynamic-content-path routers-path controllers-path
+		    views-path use-src src-path allow-read-eval config-print-case
+		    render-who-include-symbol) project-state
+    (let (rootpath)
       (setf rootpath (getf config-form :project-root))
       ;; TODO: thoroughly check user inputs from config file
-      (setf name (let ((raw-name (getf config-form :name)))
-		   (if (symbolp raw-name)
-		       (string-downcase (symbol-name raw-name))
-		       (format nil "~A" raw-name)))
-	    config-file config-path
-	    ports (getf config-form :ports)
-	    project-root (ensure-directories-exist rootpath)
-	    static-content-path (ensure-directories-exist (merge-pathnames
-							   (getf config-form :static-content-path) rootpath))
-	    dynamic-content-path (ensure-directories-exist (merge-pathnames
-							    (getf config-form :dynamic-content-path) rootpath))
-	    routes-path (ensure-directories-exist (merge-pathnames
-						   (getf config-form :routes-path) rootpath))
-	    controllers-path (ensure-directories-exist (merge-pathnames
-							(getf config-form :controllers-path) rootpath))
-	    views-path (ensure-directories-exist (merge-pathnames
-						  (getf config-form :views-path) rootpath))
-	    use-src (getf config-form :use-src)
-	    src-path (ensure-directories-exist (merge-pathnames
-						(getf config-form :src-path) rootpath))
-	    allow-read-eval (getf config-form :allow-read-eval)
-	    config-print-case (getf config-form :config-print-case)
-	    render-who-include-symbol (getf config-form :render-who-include-symbol)))))
+      (setf
+       name (let ((raw-name (getf config-form :name)))
+	      (if (symbolp raw-name)
+		  (string-downcase (symbol-name raw-name))
+		  (format nil "~A" raw-name)))
+       config-file config-path
+       ports (getf config-form :ports)
+       project-root (ensure-directories-exist rootpath)
+       static-content-path (ensure-directories-exist (merge-pathnames
+						      (getf config-form :static-content-path) rootpath))
+       dynamic-content-path (ensure-directories-exist (merge-pathnames
+						       (getf config-form :dynamic-content-path) rootpath))
+       routers-path (ensure-directories-exist (merge-pathnames
+					       (getf config-form :routers-path) rootpath))
+       controllers-path (ensure-directories-exist (merge-pathnames
+						   (getf config-form :controllers-path) rootpath))
+       views-path (ensure-directories-exist (merge-pathnames
+					     (getf config-form :views-path) rootpath))
+       use-src (getf config-form :use-src)
+       src-path (ensure-directories-exist (merge-pathnames
+					   (getf config-form :src-path) rootpath))
+       allow-read-eval (getf config-form :allow-read-eval)
+       config-print-case (getf config-form :config-print-case)
+       render-who-include-symbol (getf config-form :render-who-include-symbol)))))
 
-(defgeneric write-config (braculon-state)
+(defun load-router-files (state)
+;; search according to order.conf
+;; call routers in order, call ctrl on non-nil or default err ctrl
+  )
+
+(defmethod initialize-instance :after ((state project-state) &key config overwrite)
+  (let (config-form config-path)
+    ;;make sure we have both config data and a file to keep it there.
+    (multiple-value-setq (config-form config-path)
+      (load-config-file-settings config overwrite))
+    (fill-slots-with-config-file-settings config-form config-path state)
+    ;; TODO: load routers, controllers and views
+    ))
+
+(defun find-instance-by-conf-file (conf-filepath)
+  (find-if (lambda (tested-inst)
+	     (equal conf-filepath (config-file tested-inst))) *project-instances*))
+
+(defun find-instance-by-name (name)
+  (declare (type string name))
+    (find-if (lambda (tested-inst)
+	       (string= name (name tested-inst))) *project-instances*))
+
+(defun wizard (&key config-file name ports) ;;TODO more keys
+  "Interactively create a new web project."
+  nil)
+
+(defun launch (config &key overwrite)
+  (let ((obj (make-instance 'project-state :config config :overwrite overwrite)))
+    ;; TODO somehow warn if already launched
+    (unless (or (not obj)
+		 (find-instance-by-conf-file (config-file obj))
+		 (find-instance-by-name (name obj)))
+      (push obj *project-instances*)
+      (fill-acceptors obj)
+      (setf (slot-value obj 'launch-time) (get-universal-time))
+      (name obj))))
+
+(defun finish (project-id)
+  "Uses a name or a config file path of a launched project to finish it.
+Return T if a project was found, NIL otherwise."
+  (declare (type (or string pathname) project-id))
+  (let (found-project)
+    (setq found-project (if (fad:file-exists-p project-id)
+			    (find-instance-by-conf-file project-id)
+			    (find-instance-by-name project-id)))
+    (when found-project
+      (stop-acceptors found-project)
+      (setq *project-instances*
+	    (delete-if (lambda (tested-inst)
+			 (eq found-project tested-inst))
+		       *project-instances*))
+      t)))
+
+(defun fill-acceptors (project-state)
+  "Instantiate and start all acceptors in a project based on its PORTS config field."
+  (with-slots (ports acceptors static-content-path) project-state
+    (if acceptors (error "Will not fill non-empty ACCEPTORS field in PROJECT-STATE")
+	(dolist (port ports t)
+	  (push (hunchentoot:start (make-instance 'brac-acceptor
+				      :parent project-state
+				      :document-root static-content-path
+				      :port port))
+		acceptors)))))
+
+(defun stop-acceptors (project-state)
+  "Stop all acceptors in a project."
+  (with-slots (acceptors) project-state
+    (dotimes (i (length acceptors) t)
+      (hunchentoot:stop (pop acceptors)))))
+
+(defun show-running ()
+  "Prints a list of running web projects."
+  (let ((namelist (mapcar #'name *project-instances*)))
+    (format t "~{~A~%~}" namelist)
+    ;; TODO: uptime
+    namelist))
+
+(defmethod print-object ((state project-state) stream)
+  (print-unreadable-object (state stream :type t)
+    (format stream "~A" (name state))))
+
+(defgeneric write-config (project-state)
   (:documentation ""))
 
-(defmethod state-report ((state braculon-state))
+(defmethod state-report ((state project-state))
   ;;TODO
   (format t
 	  "Test report for ~A:~% Config file: ~A~% Acceptors: (~{~A~^ ~})~%"

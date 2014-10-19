@@ -10,8 +10,9 @@
                :hunchentoot)
   :components ((:file "package")
                (:static-file "LICENSE")
-	       (:file "braculon" :depends-on ("package"))
+	       (:file "util" :depends-on ("package"))
+	       (:file "braculon" :depends-on ("package" "util"))
 	       (:file "states" :depends-on ("package"))
-	       (:file "routers" :depends-on ("package")))
+	       (:file "routers" :depends-on ("package" "util")))
   :description ""
   :long-description "")
