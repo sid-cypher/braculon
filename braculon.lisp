@@ -153,11 +153,6 @@ filename-specifying form was found in the provided :config argument." :test #'st
        config-print-case (getf config-form :config-print-case)
        render-who-include-symbol (getf config-form :render-who-include-symbol)))))
 
-(defun load-router-files (state)
-;; search according to order.conf
-;; call routers in order, call ctrl on non-nil or default err ctrl
-  )
-
 (defmethod initialize-instance :after ((state project-state) &key config overwrite)
   (let (config-form config-path)
     ;;make sure we have both config data and a file to keep it there.

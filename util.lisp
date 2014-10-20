@@ -3,7 +3,7 @@
 (in-package :braculon)
 
 (defmacro cat (&body bod)
-  "because 'concatenate strings' is too much to type"
+  "because \(concatenate 'strings ...) is too much to type"
   `(concatenate 'string ,@bod))
 
 (defmacro silence (&body bod)
@@ -18,3 +18,14 @@
     (if (not truepath) nil
 	(with-open-file (stream truepath)
 	  (read stream)))))
+
+(defun filter-single-pathname-type (filelist typestr)
+  "Accepts a list of pathnames and filters it to return a list with pathnames
+of specified pathname-type only (compared with STRING=)."
+  (declare (type list filelist)
+	   (type string typestr))
+  (remove-if-not (lambda (filename)
+		   (and (string= typestr (or (pathname-type filename) "."))
+			(not (eql (aref (or (pathname-name filename) ".") 0)
+				  #\.))))
+		 filelist))

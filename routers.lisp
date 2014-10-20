@@ -28,6 +28,15 @@
 	      :initarg :load-time
 	      :documentation "")))
 
+(defgeneric route-request (request)
+  (:documentation "o hai, i send off reqs thru routing tubez"))
+
+(defgeneric load-builtin-routers (state)
+  (:documentation ""))
+
+(defgeneric load-router-files (state)
+  (:documentation ""))
+
 ;;; TODO: check interference between process requests
 (defvar *request-interference* nil)
 
@@ -75,9 +84,6 @@ replaced by ROUTE-REQUEST."
 		;; error occurred while writing to the client.  attempt to report.
 		(report-error-to-client e)))))))))
 
-(defgeneric route-request (request)
-  (:documentation "o hai, i send off reqs thru routing tubez"))
-
 ;;; TODO: Make HANDLE-STATIC-FILE into a controller.
 (defmethod route-request ((req brac-request))
   "Offers the request to registered routers until one of them accepts or all of
@@ -101,7 +107,44 @@ within the handler."
     (hunchentoot::with-debugger
       ;; ACCEPTOR-DISPATCH-REQUEST was here.
       ;; TODO replace with file-based routing
+      ;; search according to order.conf
       ;;   routers return nil or controller name
       ;;   call them in user-defined order, pass request to resulting controller.
       ;; need own fallback instead of CALL-NEXT-METHOD
+      ;; call result ctrl on non-nil or default err ctrl
+
       )))
+
+(defmethod load-builtin-routers ((state project-state))
+  (let ((fixed-router-callable ;; with :regex t option
+	 (lambda (req options) ;; TODO
+	   1))
+	(static-router-callable
+	 (lambda (req options)
+	   1))
+	(dynamic-router-callable
+	 (lambda (req options)
+	   1))
+	(redirect-router-callable
+	 (lambda (req options)
+	   1)))
+    ;; TODO make router objects and push them into state
+    )
+
+
+(defmethod load-router-files ((state project-state))
+  (let ((default-order '(static dynamic (fixed ("/" "index"))))
+	(order-file (merge-pathnames #p"order.conf" (routers-path state)))
+	order-form)
+    (setf order-form (read-form-file order-file))
+    (unless order-form
+      (with-open-file (filestream order-file
+				  :if-does-not-exist :create
+				  :if-exists :error)
+	;; TODO writeout default "index" controller elsewhere
+	(write default-order
+	       :case (config-print-case state)))
+      (setf order-form default-order))
+    (setf (slot-value state 'routers-order) order-form)
+    ;; TODO load router objects from files into state
+    ))
