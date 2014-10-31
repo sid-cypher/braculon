@@ -16,8 +16,9 @@
   (declare (type pathname filepath))
   (let ((truepath (cl-fad:file-exists-p filepath)))
     (if (not truepath) nil
-	(with-open-file (stream truepath)
-	  (read stream)))))
+	(with-open-file (stream truepath) ;;TODO handle exceptions
+	  (handler-case (read stream :eof-value nil)
+	    (error () nil))))))
 
 (defun filter-single-pathname-type (filelist typestr)
   "Accepts a list of pathnames and filters it to return a list with pathnames

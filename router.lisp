@@ -11,9 +11,9 @@
    :request-class 'brac-request))
 
 (defclass brac-request (hunchentoot:request)
-  (router-data :reader router-data
+  ((router-data :reader router-data
 	       :initform '()
-	       :documentation ""))
+	       :documentation "")))
 
 (defclass brac-router ()
   ((project-state :reader project-state
@@ -178,17 +178,20 @@ within the handler."
     (remhash rtr-name routers)))
 
 (defmethod load-router-files ((state project-state))
-  (let ((default-order '(static dynamic (fixed ("/" "index"))))
+  (let ((default-order '(braculon::static braculon::dynamic (braculon::fixed "/" "index")))
 	(order-file (merge-pathnames #p"order.conf" (routers-path state)))
 	order-form)
     (setf order-form (read-form-file order-file))
     (unless order-form
-      (with-open-file (filestream order-file
+      (with-open-file (filestream order-file ;; TODO handle all exceptions
+				  :direction :output
 				  :if-does-not-exist :create
-				  :if-exists :error)
+				  :if-exists :rename)
 	;; TODO writeout default "index" controller elsewhere
-	(write default-order
-	       :case (config-print-case state)))
+	(let ((*package* (find-package :braculon)))
+	  (write default-order
+		 :case (config-print-case state)
+		 :stream filestream)))
       (setf order-form default-order))
     (setf (slot-value state 'routers-order) order-form)
     ;; TODO load router objects from files into state
