@@ -38,12 +38,18 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	      :initform '()
 	      :documentation "")
    (routers :reader routers
+	    :initform (make-hash-table :test 'equal)
+	    :documentation "")
+   (router-names :reader router-names
 	    :initform '()
 	    :documentation "")
    (routers-order :reader routers-order
 		  :initform '()
 		  :documentation "")
    (controllers :reader controllers
+		:initform (make-hash-table :test 'equal)
+		:documentation "")
+   (controller-names :reader controller-names
 		:initform '()
 		:documentation "")
    (views :reader views
@@ -160,6 +166,8 @@ filename-specifying form was found in the provided :config argument." :test #'st
       (load-config-file-settings config overwrite))
     (fill-slots-with-config-file-settings config-form config-path state)
     ;; TODO: load routers, controllers and views
+    (load-builtin-routers state)
+    (load-router-files state)
     ))
 
 (defun find-instance-by-conf-file (conf-filepath)
@@ -176,6 +184,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
   nil)
 
 (defun launch (config &key overwrite)
+  ;; TODO optional config, wizard on *query-io*
   (let ((obj (make-instance 'project-state :config config :overwrite overwrite)))
     ;; TODO somehow warn if already launched
     (unless (or (not obj)

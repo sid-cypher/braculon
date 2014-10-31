@@ -12,7 +12,7 @@
                (:static-file "LICENSE")
 	       (:file "util" :depends-on ("package"))
 	       (:file "braculon" :depends-on ("package" "util"))
-	       (:file "states" :depends-on ("package"))
-	       (:file "routers" :depends-on ("package" "util")))
+	       (:file "router" :depends-on ("package" "util")))
+	       (:file "controller" :depends-on ("package"))
   :description ""
   :long-description "")

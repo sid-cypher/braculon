@@ -4,20 +4,25 @@
 
 (defclass brac-acceptor (hunchentoot:acceptor)
   ((project-state :reader project-state
-		 :initarg :parent
-		 :initform (error "Please specify the project that will use this object.")
-		 :documentation ""))
+		  :initarg :parent
+		  :initform (error "Please specify the project that will use this object.")
+		  :documentation ""))
   (:default-initargs
    :request-class 'brac-request))
 
 (defclass brac-request (hunchentoot:request)
-  ())
+  (router-data :reader router-data
+	       :initform '()
+	       :documentation ""))
 
-(defclass router-state ()
+(defclass brac-router ()
   ((project-state :reader project-state
 		  :initarg :parent
 		  :initform (error "Please specify the project that will use this object.")
 		  :documentation "")
+   (name :reader name
+	 :initarg :name
+	 :documentation "")
    (callable :reader callable
 	     :initarg :callable
 	     :documentation "")
@@ -25,11 +30,17 @@
 		:initarg :source-file
 		:documentation "")
    (load-time :reader load-time
-	      :initarg :load-time
+	      :initform (get-universal-time)
 	      :documentation "")))
 
 (defgeneric route-request (request)
   (:documentation "o hai, i send off reqs thru routing tubez"))
+
+(defgeneric add-router (state rtr)
+  (:documentation ""))
+
+(defgeneric del-router (state rtr-name)
+  (:documentation ""))
 
 (defgeneric load-builtin-routers (state)
   (:documentation ""))
@@ -61,8 +72,9 @@ replaced by ROUTE-REQUEST."
 									     backtrace)))
 	       ;; TODO: remember the error messages and route them to a fitting controller,
 	       ;; to be rendered in a more sophisticated way.
+	       ;; TODO: BRAC-REQUEST should carry the parent acceptor and the child reply in slots
 	       (start-output +http-internal-server-error+
-			     (acceptor-status-message *acceptor*
+			     (acceptor-status-message *acceptor* ;; TODO no specials plz
 						      +http-internal-server-error+
 						      :error (princ-to-string error)
 						      :backtrace (princ-to-string backtrace)))))
@@ -76,10 +88,10 @@ replaced by ROUTE-REQUEST."
 	      (report-error-to-client error backtrace))
 	    (handler-case
 		(hunchentoot::with-debugger
-		  (start-output (return-code *reply*) ;; TODO: get rid of special var reply
-				(or contents
-				    (acceptor-status-message *acceptor*
-							     (return-code *reply*)))))
+		    (start-output (return-code *reply*) ;; TODO: get rid of special vars
+				  (or contents
+				      (acceptor-status-message *acceptor*
+							       (return-code *reply*)))))
 	      (error (e)
 		;; error occurred while writing to the client.  attempt to report.
 		(report-error-to-client e)))))))))
@@ -105,32 +117,65 @@ within the handler."
                     (when *log-lisp-warnings-p*
                       (log-message* *lisp-warnings-log-level* "~A" cond)))))
     (hunchentoot::with-debugger
-      ;; ACCEPTOR-DISPATCH-REQUEST was here.
-      ;; TODO replace with file-based routing
-      ;; search according to order.conf
-      ;;   routers return nil or controller name
-      ;;   call them in user-defined order, pass request to resulting controller.
-      ;; need own fallback instead of CALL-NEXT-METHOD
-      ;; call result ctrl on non-nil or default err ctrl
+	;; ACCEPTOR-DISPATCH-REQUEST was here.
+	;; TODO replace with file-based routing
+	;; search according to order.conf
+	;;   routers return nil or controller name
+	;;   call routers in user-defined order, pass request to resulting controller.
+	;; need own fallback instead of CALL-NEXT-METHOD
+	;; call result ctrl on non-nil or default err ctrl
+	;; finally a controller returns a string or an octet array
+	;; - return it here as well
 
-      )))
+	;;(setf (hunchentoot:return-code *reply*) +http-service-unavailable+)
+	(format nil "ROUTE-REQUEST fired for ~A~%" req))))
 
 (defmethod load-builtin-routers ((state project-state))
   (let ((fixed-router-callable ;; with :regex t option
 	 (lambda (req options) ;; TODO
-	   1))
+	   nil))
 	(static-router-callable
 	 (lambda (req options)
-	   1))
+	   nil))
 	(dynamic-router-callable
 	 (lambda (req options)
-	   1))
+	   nil))
 	(redirect-router-callable
 	 (lambda (req options)
-	   1)))
-    ;; TODO make router objects and push them into state
-    )
+	   nil)))
+    ;; TODO make router objects and add them to state
+    (add-router state (make-instance 'brac-router
+				     :parent state
+				     :name "fixed"
+				     :callable fixed-router-callable
+				     :source-file nil))
+    (add-router state (make-instance 'brac-router
+				     :parent state
+				     :name "static"
+				     :callable static-router-callable
+				     :source-file nil))
+    (add-router state (make-instance 'brac-router
+				     :parent state
+				     :name "dynamic"
+				     :callable dynamic-router-callable
+				     :source-file nil))
+    (add-router state (make-instance 'brac-router
+				     :parent state
+				     :name "redirect"
+				     :callable redirect-router-callable
+				     :source-file nil))))
 
+(defmethod add-router ((state project-state) (rtr brac-router))
+  "" ;; TODO
+  (with-slots (routers router-names) state
+    (let ((rtr-name (name rtr)))
+      (push rtr-name router-names)
+      (setf (gethash rtr-name routers) rtr))))
+
+(defmethod del-router ((state project-state) rtr-name)
+  (with-slots (routers router-names) state
+    (remove rtr-name router-names :test #'string=)
+    (remhash rtr-name routers)))
 
 (defmethod load-router-files ((state project-state))
   (let ((default-order '(static dynamic (fixed ("/" "index"))))
