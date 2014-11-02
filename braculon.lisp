@@ -200,9 +200,10 @@ filename-specifying form was found in the provided :config argument." :test #'st
 Return T if a project was found, NIL otherwise."
   (declare (type (or string pathname) project-id))
   (let (found-project)
-    (setq found-project (if (fad:file-exists-p project-id)
-			    (find-instance-by-conf-file project-id)
-			    (find-instance-by-name project-id)))
+    (setq found-project (find-instance-by-name project-id))
+    (when (and (not found-project)
+	       (fad:file-exists-p project-id))
+      (setq found-project (find-instance-by-conf-file project-id)))
     (when found-project
       (stop-acceptors found-project)
       (setq *project-instances*
