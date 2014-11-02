@@ -33,6 +33,10 @@
 	      :initform (get-universal-time)
 	      :documentation "")))
 
+(defmethod print-object ((rtr brac-router) stream)
+  (print-unreadable-object (rtr stream :type t)
+    (format stream "~A" (name rtr))))
+
 (defgeneric route-request (request)
   (:documentation "o hai, i send off reqs thru routing tubez"))
 
@@ -133,7 +137,8 @@ within the handler."
 (defmethod load-builtin-routers ((state project-state))
   (let ((fixed-router-callable ;; with :regex t option
 	 (lambda (req options) ;; TODO
-	   nil))
+	   (format t "fixed opts: ~A~%" options)
+	   "hello"))
 	(static-router-callable
 	 (lambda (req options)
 	   nil))
@@ -143,7 +148,6 @@ within the handler."
 	(redirect-router-callable
 	 (lambda (req options)
 	   nil)))
-    ;; TODO make router objects and add them to state
     (add-router state (make-instance 'brac-router
 				     :parent state
 				     :name "fixed"
@@ -163,7 +167,8 @@ within the handler."
 				     :parent state
 				     :name "redirect"
 				     :callable redirect-router-callable
-				     :source-file nil))))
+				     :source-file nil))
+    t))
 
 (defmethod add-router ((state project-state) (rtr brac-router))
   "" ;; TODO

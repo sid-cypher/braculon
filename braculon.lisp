@@ -167,6 +167,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
     (fill-slots-with-config-file-settings config-form config-path state)
     ;; TODO: load routers, controllers and views
     (load-builtin-routers state)
+    (load-builtin-controllers state)
     (load-router-files state)
     ))
 

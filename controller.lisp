@@ -20,6 +20,10 @@
 	      :initform (get-universal-time)
 	      :documentation "")))
 
+(defmethod print-object ((ctrl brac-controller) stream)
+  (print-unreadable-object (ctrl stream :type t)
+    (format stream "~A" (name ctrl))))
+
 (defgeneric load-builtin-controllers (state)
   (:documentation ""))
 
@@ -33,19 +37,30 @@
   (let ((messages-ctrl-callable
 	 (lambda (req)
 	   nil))
+	(hello-ctrl-callable
+	 (lambda (req)
+	   "Outputs a short greetings page. A tiny built-in controller for testing purposes."
+	   (cl-who:with-html-output-to-string (s nil :prologue t)
+	     (:html (:head (:title "braculon:hello"))
+		    (:body (:p "Hello! Things seem to work here."))))))
 	(http-code-ctrl-callable
 	 (lambda (req)
 	   nil)))
-    nil))
+    (add-controller state (make-instance 'brac-controller
+					 :parent state
+					 :name "hello"
+					 :callable hello-ctrl-callable
+					 :source-file nil))
+    t))
 
 (defmethod add-controller ((state project-state) (ctrl brac-controller))
   "" ;; TODO
-  (with-slots (routers router-names) state
+  (with-slots (controllers controller-names) state
     (let ((ctrl-name (name ctrl)))
-      (push ctrl-name router-names)
-      (setf (gethash ctrl-name routers) ctrl))))
+      (push ctrl-name controller-names)
+      (setf (gethash ctrl-name controllers) ctrl))))
 
 (defmethod del-controller ((state project-state) ctrl-name)
-  (with-slots (routers router-names) state
-    (remove ctrl-name router-names :test #'string=)
-    (remhash ctrl-name routers)))
+  (with-slots (controllers controller-names) state
+    (remove ctrl-name controller-names :test #'string=)
+    (remhash ctrl-name controllers)))
