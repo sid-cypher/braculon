@@ -24,6 +24,7 @@
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
+;; TODO: replace generic functions with regular defun, declare type
 (defgeneric load-builtin-controllers (state)
   (:documentation ""))
 
@@ -40,7 +41,7 @@
 	(hello-ctrl-callable
 	 (lambda (req)
 	   "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-	   (cl-who:with-html-output-to-string (s nil :prologue t)
+	   (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 	     (:html (:head (:title "braculon:hello"))
 		    (:body (:p "Hello! Things seem to work here."))))))
 	(http-code-ctrl-callable
@@ -48,8 +49,18 @@
 	   nil)))
     (add-controller state (make-instance 'brac-controller
 					 :parent state
+					 :name "messages"
+					 :callable messages-ctrl-callable
+					 :source-file nil))
+    (add-controller state (make-instance 'brac-controller
+					 :parent state
 					 :name "hello"
 					 :callable hello-ctrl-callable
+					 :source-file nil))
+    (add-controller state (make-instance 'brac-controller
+					 :parent state
+					 :name "http code"
+					 :callable http-code-ctrl-callable
 					 :source-file nil))
     t))
 

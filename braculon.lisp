@@ -92,6 +92,13 @@ filename-specifying form was found in the provided :config argument." :test #'st
 		:documentation ""))
   (:documentation ""))
 
+(defmethod print-object ((state project-state) stream)
+  (print-unreadable-object (state stream :type t)
+    (format stream "~A" (name state))))
+
+(defgeneric write-config (project-state)
+  (:documentation ""))
+
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)
   (declare (type string value))
@@ -236,13 +243,6 @@ Return T if a project was found, NIL otherwise."
     (format t "~{~A~%~}" namelist)
     ;; TODO: uptime
     namelist))
-
-(defmethod print-object ((state project-state) stream)
-  (print-unreadable-object (state stream :type t)
-    (format stream "~A" (name state))))
-
-(defgeneric write-config (project-state)
-  (:documentation ""))
 
 (defmethod state-report ((state project-state))
   ;;TODO

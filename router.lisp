@@ -121,24 +121,51 @@ within the handler."
                     (when *log-lisp-warnings-p*
                       (log-message* *lisp-warnings-log-level* "~A" cond)))))
     (hunchentoot::with-debugger
-	;; ACCEPTOR-DISPATCH-REQUEST was here.
-	;; TODO replace with file-based routing
-	;; search according to order.conf
-	;;   routers return nil or controller name
-	;;   call routers in user-defined order, pass request to resulting controller.
-	;; need own fallback instead of CALL-NEXT-METHOD
-	;; call result ctrl on non-nil or default err ctrl
-	;; finally a controller returns a string or an octet array
-	;; - return it here as well
+      ;; ACCEPTOR-DISPATCH-REQUEST was here.
+      ;; routers return nil or controller name
+      ;; controller return a string or an octet array
+      ;; - return it here as well
+      (let ((state (project-state (request-acceptor req)))
+	    chosen-controller-name
+	    reply-content)
+	(flet ((find-and-call (state req name opts)
+		 (let (working-router)
+		   (setf working-router (gethash (if (symbolp name)
+						     (string-downcase (symbol-name name))
+						     (the string name))
+						 (routers state)))
+		   (when working-router ;; TODO: log message if not found
+		     ;; TODO sanitize options
+		     (funcall (callable working-router) req opts)))))
+	  (loop for ordered-router-args in (routers-order state)
+	     while (not chosen-controller-name) do
+	       (cond ((or (symbolp ordered-router-args)
+			  (stringp ordered-router-args))
+		      (setf chosen-controller-name
+			    (find-and-call state req
+					   ordered-router-args nil)))
+		     ((consp ordered-router-args)
+		      (setf chosen-controller-name
+			    (find-and-call state req
+					   (first ordered-router-args)
+					   (rest ordered-router-args)))) ;; TODO
+		     ;; TODO fail more gracefully
+		     (t (error "Only symbols, strings and lists are allowed in order.conf"))))
 
-	;;(setf (hunchentoot:return-code *reply*) +http-service-unavailable+)
-	(format nil "ROUTE-REQUEST fired for ~A~%" req))))
+	  (when chosen-controller-name
+	    (setf reply-content
+		  (funcall (callable (gethash chosen-controller-name (controllers state)))
+			   req)))
+
+	  ;;TODO think of a sane fallback, push info through the log system
+	  (or reply-content
+	      (progn (setf (hunchentoot:return-code *reply*) +http-not-found+)
+		     "o hai")))))))
 
 (defmethod load-builtin-routers ((state project-state))
   (let ((fixed-router-callable ;; with :regex t option
 	 (lambda (req options) ;; TODO
-	   (format t "fixed opts: ~A~%" options)
-	   "hello"))
+	   (values "hello")))
 	(static-router-callable
 	 (lambda (req options)
 	   nil))
