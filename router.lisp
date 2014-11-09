@@ -223,8 +223,46 @@ within the handler."
 	(let ((*package* (find-package :braculon)))
 	  (write default-order
 		 :case (config-print-case state)
-		 :stream filestream)))
+		 :stream filestream)
+	  (terpri filestream)))
       (setf order-form default-order))
-    (setf (slot-value state 'routers-order) order-form)
-    ;; TODO load router objects from files into state
-    ))
+    (setf (slot-value state 'routers-order) order-form))
+
+  ;; TODO load router objects from files into state
+  (let ((router-src-files (cl-fad:list-directory (routers-path state))))
+    (dolist (filename router-src-files)
+      (let ((source-file-forms (read-multiple-forms-file filename)))
+	(dolist (src-form source-file-forms)
+	  (let* ((fcall-symbol (when (consp src-form)
+				 (pop src-form)))
+		 (rtr-name (when (consp src-form)
+			     (pop src-form)))
+		 (rtr-lambda-list (when (consp src-form)
+				    (pop src-form)))
+		 (req-sym (when (consp rtr-lambda-list)
+			    (pop rtr-lambda-list)))
+		 (opts-sym (when (consp rtr-lambda-list)
+			     (pop rtr-lambda-list)))
+		 (rtr-body (when (consp src-form)
+			     src-form))
+		 rtr-callable) ;; TODO report errors
+	    (when (and (symbolp rtr-name)
+		       (not (constantp rtr-name)))
+	      (setf rtr-name (string-downcase (symbol-name rtr-name))))
+	    (when (and (string= (symbol-name fcall-symbol) "DEFROUTER")
+		       (stringp rtr-name)
+		       (symbolp req-sym)
+		       (symbolp opts-sym)
+		       (not (constantp req-sym))
+		       (not (constantp opts-sym))
+		       rtr-body)
+	      (setf rtr-callable
+		    (ignore-errors
+		      (eval `(lambda (,req-sym ,opts-sym)
+			       ,@rtr-body)))))
+	    (when rtr-callable ;; TODO log this addition
+	      (add-router state (make-instance 'brac-router
+					       :parent state
+					       :name rtr-name
+					       :callable rtr-callable
+					       :source-file filename)))))))))

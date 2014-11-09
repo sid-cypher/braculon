@@ -44,6 +44,9 @@
 	   (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 	     (:html (:head (:title "braculon:hello"))
 		    (:body (:p "Hello! Things seem to work here."))))))
+	(dir-index-ctrl-callable
+	 (lambda (req)
+	   nil))
 	(http-code-ctrl-callable
 	 (lambda (req)
 	   nil)))
@@ -56,6 +59,11 @@
 					 :parent state
 					 :name "hello"
 					 :callable hello-ctrl-callable
+					 :source-file nil))
+    (add-controller state (make-instance 'brac-controller
+					 :parent state
+					 :name "dir-index"
+					 :callable dir-index-ctrl-callable
 					 :source-file nil))
     (add-controller state (make-instance 'brac-controller
 					 :parent state
