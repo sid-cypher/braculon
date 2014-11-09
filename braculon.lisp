@@ -172,11 +172,11 @@ filename-specifying form was found in the provided :config argument." :test #'st
     (multiple-value-setq (config-form config-path)
       (load-config-file-settings config overwrite))
     (fill-slots-with-config-file-settings config-form config-path state)
-    ;; TODO: load routers, controllers and views
+    ;; TODO: maybe load views
     (load-builtin-routers state)
     (load-builtin-controllers state)
     (load-router-files state)
-    ))
+    (load-controller-files state)))
 
 (defun find-instance-by-conf-file (conf-filepath)
   (find-if (lambda (tested-inst)

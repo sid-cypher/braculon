@@ -24,15 +24,30 @@
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
-;; TODO: replace generic functions with regular defun, declare type
-(defgeneric load-builtin-controllers (state)
-  (:documentation ""))
-
 (defgeneric add-controller (state ctrl)
   (:documentation ""))
 
 (defgeneric del-controller (state ctrl-name)
   (:documentation ""))
+
+;; TODO: replace generic functions with regular defun, declare type
+(defgeneric load-builtin-controllers (state)
+  (:documentation ""))
+
+(defgeneric load-controller-files (state)
+  (:documentation ""))
+
+(defmethod add-controller ((state project-state) (ctrl brac-controller))
+  "" ;; TODO
+  (with-slots (controllers controller-names) state
+    (let ((ctrl-name (name ctrl)))
+      (push ctrl-name controller-names)
+      (setf (gethash ctrl-name controllers) ctrl))))
+
+(defmethod del-controller ((state project-state) ctrl-name)
+  (with-slots (controllers controller-names) state
+    (remove ctrl-name controller-names :test #'string=)
+    (remhash ctrl-name controllers)))
 
 (defmethod load-builtin-controllers ((state project-state))
   (let ((messages-ctrl-callable
@@ -72,14 +87,38 @@
 					 :source-file nil))
     t))
 
-(defmethod add-controller ((state project-state) (ctrl brac-controller))
-  "" ;; TODO
-  (with-slots (controllers controller-names) state
-    (let ((ctrl-name (name ctrl)))
-      (push ctrl-name controller-names)
-      (setf (gethash ctrl-name controllers) ctrl))))
-
-(defmethod del-controller ((state project-state) ctrl-name)
-  (with-slots (controllers controller-names) state
-    (remove ctrl-name controller-names :test #'string=)
-    (remhash ctrl-name controllers)))
+(defmethod load-controller-files ((state project-state))
+  (let ((controller-src-files (cl-fad:list-directory (controllers-path state))))
+    (dolist (filename controller-src-files)
+      (let ((source-file-forms (read-multiple-forms-file filename)))
+	(dolist (src-form source-file-forms)
+	  (let* ((fcall-symbol (when (consp src-form)
+				 (pop src-form)))
+		 (ctrl-name (when (consp src-form)
+			     (pop src-form)))
+		 (ctrl-lambda-list (when (consp src-form)
+				    (pop src-form)))
+		 (req-sym (when (consp ctrl-lambda-list)
+			    (pop ctrl-lambda-list)))
+		 (ctrl-body (when (consp src-form)
+			     src-form))
+		 ctrl-callable) ;; TODO report errors
+	    (when (and (symbolp ctrl-name)
+		       (not (constantp ctrl-name)))
+	      (setf ctrl-name (string-downcase (symbol-name ctrl-name))))
+	    (when (and (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
+		       (stringp ctrl-name)
+		       (symbolp req-sym)
+		       (null ctrl-lambda-list)
+		       (not (constantp req-sym))
+		       ctrl-body)
+	      (setf ctrl-callable
+		    (ignore-errors ;; TODO log the errors instead
+		      (eval `(lambda (,req-sym)
+			       ,@ctrl-body)))))
+	    (when ctrl-callable ;; TODO log this addition
+	      (add-controller state (make-instance 'brac-controller
+					       :parent state
+					       :name ctrl-name
+					       :callable ctrl-callable
+					       :source-file filename)))))))))

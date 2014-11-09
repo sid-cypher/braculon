@@ -165,7 +165,15 @@ within the handler."
 (defmethod load-builtin-routers ((state project-state))
   (let ((fixed-router-callable ;; with :regex t option
 	 (lambda (req options) ;; TODO
-	   (values "hello")))
+	   (destructuring-bind (uri target) options
+	     (when (and (stringp uri)
+			(string= (hunchentoot::script-name req) uri)
+			(or (stringp target)
+			    (symbolp target)))
+	       (when (symbolp target)
+		 (setf target (string-downcase (symbol-name target))))
+	       (when (find target (controller-names state) :test #'string=)
+		 target)))))
 	(static-router-callable
 	 (lambda (req options)
 	   nil))
@@ -228,12 +236,12 @@ within the handler."
       (setf order-form default-order))
     (setf (slot-value state 'routers-order) order-form))
 
-  ;; TODO load router objects from files into state
   (let ((router-src-files (cl-fad:list-directory (routers-path state))))
     (dolist (filename router-src-files)
       (let ((source-file-forms (read-multiple-forms-file filename)))
 	(dolist (src-form source-file-forms)
-	  (let* ((fcall-symbol (when (consp src-form)
+	  (let* ((fcall-symbol (when (and (consp src-form)
+					  (symbolp (first src-form)))
 				 (pop src-form)))
 		 (rtr-name (when (consp src-form)
 			     (pop src-form)))
@@ -253,11 +261,12 @@ within the handler."
 		       (stringp rtr-name)
 		       (symbolp req-sym)
 		       (symbolp opts-sym)
+		       (null rtr-lambda-list)
 		       (not (constantp req-sym))
 		       (not (constantp opts-sym))
 		       rtr-body)
 	      (setf rtr-callable
-		    (ignore-errors
+		    (ignore-errors ;; TODO log the errors instead
 		      (eval `(lambda (,req-sym ,opts-sym)
 			       ,@rtr-body)))))
 	    (when rtr-callable ;; TODO log this addition
