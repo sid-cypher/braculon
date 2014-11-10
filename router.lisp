@@ -11,9 +11,9 @@
    :request-class 'brac-request))
 
 (defclass brac-request (hunchentoot:request)
-  ((router-data :reader router-data
-	       :initform '()
-	       :documentation "")))
+  ((router-data :accessor router-data
+		:initform '()
+		:documentation "")))
 
 (defclass brac-router ()
   ((project-state :reader project-state
@@ -165,7 +165,7 @@ within the handler."
 (defmethod load-builtin-routers ((state project-state))
   (let ((fixed-router-callable ;; with :regex t option
 	 (lambda (req options) ;; TODO
-	   (destructuring-bind (uri target) options
+	   (destructuring-bind (uri target &key data) options
 	     (when (and (stringp uri)
 			(string= (hunchentoot::script-name req) uri)
 			(or (stringp target)
@@ -173,10 +173,26 @@ within the handler."
 	       (when (symbolp target)
 		 (setf target (string-downcase (symbol-name target))))
 	       (when (find target (controller-names state) :test #'string=)
+		 (setf (router-data req) data)
 		 target)))))
 	(static-router-callable
-	 (lambda (req options)
-	   nil))
+	 (lambda (req options) ;; TODO: all the options
+	   (declare (ignorable options)) ;; for now
+	   ;; TODO: debug this
+	   (let ((static-files (delete-if-not #'cl-fad:directory-pathname-p
+					      (cl-fad:list-directory
+					       (static-content-path state))))
+		 namestring-length
+		 matchp)
+	     (setf (router-data req) nil)
+	     (when
+		 (dolist (file static-files matchp)
+		   (setf namestring-length (length (hunchentoot::script-name req)))
+		   (when (string= (subseq (hunchentoot::script-name req) 1 namestring-length)
+				  (file-namestring file))
+		     (setf (router-data req) file)
+		     (setf matchp t)))
+	       "hello")))) ;; TODO: put a file handling controller here
 	(dynamic-router-callable
 	 (lambda (req options)
 	   nil))
