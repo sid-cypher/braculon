@@ -178,21 +178,25 @@ within the handler."
 	(static-router-callable
 	 (lambda (req options) ;; TODO: all the options
 	   (declare (ignorable options)) ;; for now
-	   ;; TODO: debug this
-	   (let ((static-files (delete-if-not #'cl-fad:directory-pathname-p
-					      (cl-fad:list-directory
-					       (static-content-path state))))
-		 namestring-length
+	   (let ((static-files (delete-if #'cl-fad:directory-pathname-p
+					  (cl-fad:list-directory
+					   (static-content-path state))))
 		 matchp)
 	     (setf (router-data req) nil)
 	     (when
 		 (dolist (file static-files matchp)
-		   (setf namestring-length (length (hunchentoot::script-name req)))
-		   (when (string= (subseq (hunchentoot::script-name req) 1 namestring-length)
-				  (file-namestring file))
-		     (setf (router-data req) file)
-		     (setf matchp t)))
-	       "hello")))) ;; TODO: put a file handling controller here
+		   ;; offset 1 character for the slash, or prefix length later
+		   (let ((prefix-length (length "/")))
+		     (when (and (>= (length (hunchentoot::script-name req))
+				    (+ prefix-length (length (file-namestring file))))
+				(string= (subseq (hunchentoot::script-name req)
+						 prefix-length
+						 (+ prefix-length (length (file-namestring file))))
+					 (file-namestring file)))
+		       (setf (router-data req) file)
+		       (setf matchp t))))
+	       ;; TODO: put a file-handling controller here
+	       "hello"))))
 	(dynamic-router-callable
 	 (lambda (req options)
 	   nil))
