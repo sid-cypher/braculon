@@ -62,6 +62,9 @@
 	(dir-index-ctrl-callable
 	 (lambda (req)
 	   nil))
+	(file-contents-ctrl-callable
+	 (lambda (req)
+	   (hunchentoot::handle-static-file (getf (router-data req) :file))))
 	(http-code-ctrl-callable
 	 (lambda (req)
 	   nil)))
@@ -79,6 +82,11 @@
 					 :parent state
 					 :name "dir-index"
 					 :callable dir-index-ctrl-callable
+					 :source-file nil))
+    (add-controller state (make-instance 'brac-controller
+					 :parent state
+					 :name "file-contents"
+					 :callable file-contents-ctrl-callable
 					 :source-file nil))
     (add-controller state (make-instance 'brac-controller
 					 :parent state

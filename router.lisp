@@ -160,11 +160,11 @@ within the handler."
 	  ;;TODO think of a sane fallback, push info through the log system
 	  (or reply-content
 	      (progn (setf (hunchentoot:return-code *reply*) +http-not-found+)
-		     "o hai")))))))
+		     "404 Not Found")))))))
 
 (defmethod load-builtin-routers ((state project-state))
-  (let ((fixed-router-callable ;; with :regex t option
-	 (lambda (req options) ;; TODO
+  (let ((fixed-router-callable ;; TODO: with :regex t option
+	 (lambda (req options)
 	   (destructuring-bind (uri target &key data) options
 	     (when (and (stringp uri)
 			(string= (hunchentoot::script-name req) uri)
@@ -176,27 +176,32 @@ within the handler."
 		 (setf (router-data req) data)
 		 target)))))
 	(static-router-callable
-	 (lambda (req options) ;; TODO: all the options
-	   (declare (ignorable options)) ;; for now
-	   (let ((static-files (delete-if #'cl-fad:directory-pathname-p
-					  (cl-fad:list-directory
-					   (static-content-path state))))
-		 matchp)
-	     (setf (router-data req) nil)
-	     (when
-		 (dolist (file static-files matchp)
-		   ;; offset 1 character for the slash, or prefix length later
-		   (let ((prefix-length (length "/")))
-		     (when (and (>= (length (hunchentoot::script-name req))
-				    (+ prefix-length (length (file-namestring file))))
-				(string= (subseq (hunchentoot::script-name req)
-						 prefix-length
-						 (+ prefix-length (length (file-namestring file))))
-					 (file-namestring file)))
-		       (setf (router-data req) file)
-		       (setf matchp t))))
+	 (lambda (req options) ;; TODO: build-folder-index, recursive, separator, controller
+	   (destructuring-bind (&key folder url-prefix data) options
+	     (unless (stringp url-prefix)
+	       ;; TODO: log config error - url-prefix not a string
+	       (setf url-prefix nil))
+	     (unless (pathnamep folder) ;; TODO as well
+	       (setf folder nil))
+	     (let ((static-files (delete-if #'cl-fad:directory-pathname-p
+					    (cl-fad:list-directory
+					     (if folder
+						 (merge-pathnames folder (static-content-path state))
+						 (static-content-path state)))))
+		   (prefix (or url-prefix "/"))
+		   matchp)
+	       (setf (router-data req) nil)
+	       (loop for file in static-files
+		  while (not matchp) do
+		  ;; trailing slash :deny \(later :allow, :require)
+		    (when (string= (hunchentoot::script-name req)
+				   (cat prefix (file-namestring file)))
+		      (setf (router-data req) (list :file file
+						    :data data))
+		      (setf matchp t)))
 	       ;; TODO: put a file-handling controller here
-	       "hello"))))
+	       (when matchp
+		 "file-contents")))))
 	(dynamic-router-callable
 	 (lambda (req options)
 	   nil))
