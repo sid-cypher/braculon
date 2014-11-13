@@ -13,7 +13,8 @@
 (defclass brac-request (hunchentoot:request)
   ((router-data :accessor router-data
 		:initform '()
-		:documentation "")))
+		:documentation "")
+   (request-reply :reader request-reply)))
 
 (defclass brac-router ()
   ((project-state :reader project-state
@@ -76,7 +77,6 @@ replaced by ROUTE-REQUEST."
 									     backtrace)))
 	       ;; TODO: remember the error messages and route them to a fitting controller,
 	       ;; to be rendered in a more sophisticated way.
-	       ;; TODO: BRAC-REQUEST should carry the parent acceptor and the child reply in slots
 	       (start-output +http-internal-server-error+
 			     (acceptor-status-message *acceptor* ;; TODO no specials plz
 						      +http-internal-server-error+
@@ -100,12 +100,10 @@ replaced by ROUTE-REQUEST."
 		;; error occurred while writing to the client.  attempt to report.
 		(report-error-to-client e)))))))))
 
-;;; TODO: Make HANDLE-STATIC-FILE into a controller.
 (defmethod route-request ((req brac-request))
   "Offers the request to registered routers until one of them accepts or all of
 them refuse. Also sets up standard error handling which catches any errors
 within the handler."
-  ;;; TODO implement actual downlist dispatching through available routers.
   (handler-bind ((error
                   (lambda (cond)
                     ;; if the headers were already sent, the error
@@ -122,9 +120,10 @@ within the handler."
                       (log-message* *lisp-warnings-log-level* "~A" cond)))))
     (hunchentoot::with-debugger
       ;; ACCEPTOR-DISPATCH-REQUEST was here.
-      ;; routers return nil or controller name
-      ;; controller return a string or an octet array
+      ;; routers return nil or a controller name string
+      ;; controller returns a string or an octet array
       ;; - return it here as well
+      ;; TODO: header overrides as second value
       (let ((state (project-state (request-acceptor req)))
 	    chosen-controller-name
 	    reply-content)
@@ -151,12 +150,11 @@ within the handler."
 					   (rest ordered-router-args)))) ;; TODO
 		     ;; TODO fail more gracefully
 		     (t (error "Only symbols, strings and lists are allowed in order.conf"))))
-
 	  (when chosen-controller-name
+	    ;;TODO: reply headers manipulation by controllers' second value
 	    (setf reply-content
 		  (funcall (callable (gethash chosen-controller-name (controllers state)))
 			   req)))
-
 	  ;;TODO think of a sane fallback, push info through the log system
 	  (or reply-content
 	      (progn (setf (hunchentoot:return-code *reply*) +http-not-found+)
@@ -199,7 +197,6 @@ within the handler."
 		      (setf (router-data req) (list :file file
 						    :data data))
 		      (setf matchp t)))
-	       ;; TODO: put a file-handling controller here
 	       (when matchp
 		 "file-contents")))))
 	(dynamic-router-callable
