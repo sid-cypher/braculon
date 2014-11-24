@@ -13,6 +13,7 @@
 	       (:file "util" :depends-on ("package"))
 	       (:file "braculon" :depends-on ("package" "util"))
 	       (:file "router" :depends-on ("package" "util"))
-	       (:file "controller" :depends-on ("package")))
+	       (:file "controller" :depends-on ("package" "util"))
+	       (:file "view" :depends-on ("package" "util")))
   :description ""
   :long-description "")

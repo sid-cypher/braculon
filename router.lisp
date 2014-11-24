@@ -251,6 +251,8 @@ within the handler."
 				  :if-exists :rename)
 	;; TODO writeout default "index" controller elsewhere
 	(let ((*package* (find-package :braculon)))
+	  (princ ";;; -*- Mode: LISP; Syntax: COMMON-LISP; Base: 10 -*-" filestream)
+	  (terpri filestream)
 	  (write default-order
 		 :case (config-print-case state)
 		 :stream filestream)
@@ -276,17 +278,16 @@ within the handler."
 		 (rtr-body (when (consp src-form)
 			     src-form))
 		 rtr-callable) ;; TODO report errors
-	    (when (and (symbolp rtr-name)
-		       (not (constantp rtr-name)))
-	      (setf rtr-name (string-downcase (symbol-name rtr-name))))
 	    (when (and (string= (symbol-name fcall-symbol) "DEFROUTER")
-		       (stringp rtr-name)
+		       (or (symbolp rtr-name)
+			   (stringp rtr-name))
 		       (symbolp req-sym)
 		       (symbolp opts-sym)
 		       (null rtr-lambda-list)
 		       (not (constantp req-sym))
 		       (not (constantp opts-sym))
 		       rtr-body)
+	      (setf rtr-name (safe-name-symbol-to-string rtr-name))
 	      (setf rtr-callable
 		    (ignore-errors ;; TODO log the errors instead
 		      (eval `(lambda (,req-sym ,opts-sym)

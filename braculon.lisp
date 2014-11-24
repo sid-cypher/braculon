@@ -53,6 +53,9 @@ filename-specifying form was found in the provided :config argument." :test #'st
 		:initform '()
 		:documentation "")
    (views :reader views
+	  :initform (make-hash-table :test 'equal)
+	  :documentation "")
+   (view-names :reader view-names
 	  :initform '()
 	  :documentation "")
    (project-root :reader project-root
@@ -176,7 +179,8 @@ filename-specifying form was found in the provided :config argument." :test #'st
     (load-builtin-routers state)
     (load-builtin-controllers state)
     (load-router-files state)
-    (load-controller-files state)))
+    (load-controller-files state)
+    (load-view-files state)))
 
 (defun find-instance-by-conf-file (conf-filepath)
   (find-if (lambda (tested-inst)

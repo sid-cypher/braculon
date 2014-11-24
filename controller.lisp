@@ -111,15 +111,15 @@
 		 (ctrl-body (when (consp src-form)
 			     src-form))
 		 ctrl-callable) ;; TODO report errors
-	    (when (and (symbolp ctrl-name)
-		       (not (constantp ctrl-name)))
-	      (setf ctrl-name (string-downcase (symbol-name ctrl-name))))
-	    (when (and (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
-		       (stringp ctrl-name)
+	    (when (and (symbolp fcall-symbol)
+		       (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
+		       (or (stringp ctrl-name)
+			   (symbolp ctrl-name))
 		       (symbolp req-sym)
 		       (null ctrl-lambda-list)
 		       (not (constantp req-sym))
 		       ctrl-body)
+	      (setf ctrl-name (safe-name-symbol-to-string ctrl-name))
 	      (setf ctrl-callable
 		    (ignore-errors ;; TODO log the errors instead
 		      (eval `(lambda (,req-sym)

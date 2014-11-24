@@ -2,8 +2,13 @@
 
 (in-package :braculon)
 
+(define-constant +month-names+
+    '("January" "February" "March" "April" "May" "June"
+      "July" "August" "September" "October" "November" "December")
+  :test #'equal)
+
 (defmacro cat (&body bod)
-  "because \(concatenate 'strings ...) is too much to type"
+  "because \(concatenate 'string ...) is too much to type"
   `(concatenate 'string ,@bod))
 
 (defmacro silence (&body bod)
@@ -11,6 +16,40 @@
   `(let ((*standard-output* (make-broadcast-stream)))
      ;;TODO: scan for *std-out* redefs in body.
     ,@bod))
+
+(defun safe-name-symbol-to-string (namesym)
+  (declare (type (or string symbol) namesym))
+  (cond ((symbolp namesym)
+	 (when (or (keywordp namesym)
+		   (not (constantp namesym)))
+	   (string-downcase (symbol-name namesym))))
+	((stringp namesym)
+	 namesym)
+	(t nil)))
+
+(defun date-from-timestamp (timestamp)
+  (multiple-value-bind (s m h d mo y dw) (decode-universal-time timestamp)
+    (declare (ignore s m h dw))
+    (format nil "~A ~A, ~A" (nth (1- mo) +month-names+) d y)))
+
+(defun count-en-num (n)
+  (declare (type fixnum n))
+  (format nil "~A~[th~;st~;nd~;rd~:;th~]"
+	  n (if (= 1 (mod (floor n 10) 10)) ;; second digit, teens
+		0
+		(mod n 10))))
+
+(defun filesize (path)
+  (with-open-file (f path)
+    (file-length f)))
+
+(defun pathname-modify (source-name arglist)
+  (declare (type pathname source-name)
+	   (type cons arglist))
+  (destructuring-bind (&key directory name type) arglist
+    (make-pathname :directory (or directory (pathname-directory source-name))
+		   :name (or name (pathname-name source-name))
+		   :type (or type (pathname-type source-name)))))
 
 (defun read-form-file (filepath)
   (declare (type pathname filepath))
