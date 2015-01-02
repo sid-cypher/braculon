@@ -245,6 +245,7 @@ within the handler."
 	order-form)
     (setf order-form (read-form-file order-file))
     (unless order-form
+      ;; TODO put this file write-out behind a macro
       (with-open-file (filestream order-file ;; TODO handle all exceptions
 				  :direction :output
 				  :if-does-not-exist :create

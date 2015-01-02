@@ -83,3 +83,15 @@ of specified pathname-type only (compared with STRING=)."
 			(not (eql (aref (or (pathname-name filename) ".") 0)
 				  #\.))))
 		 filelist))
+
+(defun read-file-to-string (filedesc &key max-len)
+  (with-open-file (f filedesc)
+    (let ((str (make-array (min (file-length f)
+				max-len)
+			   :element-type 'character
+			   :fill-pointer t)))
+      (setf (fill-pointer str) (read-sequence str f :end (when (> (file-length f) max-len) max-len)))
+      str)))
+
+;;TODO: search for DEFUNs and DEFMACROs in a functions folder and eval them
+;;  in a package \(maybe with the same name as the project)
