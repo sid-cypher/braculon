@@ -53,7 +53,7 @@
 
 (defun read-form-file (filepath)
   (declare (type pathname filepath))
-  (let ((truepath (cl-fad:file-exists-p filepath)))
+  (let ((truepath (uiop:file-exists-p filepath)))
     (if (not truepath) nil
 	;;TODO push a message through event logging system
 	(ignore-errors
@@ -62,7 +62,7 @@
 
 (defun read-multiple-forms-file (filepath)
   (declare (type pathname filepath))
-  (let ((truepath (cl-fad:file-exists-p filepath)))
+  (let ((truepath (uiop:file-exists-p filepath)))
     (ignore-errors ;;TODO push a message through event logging system
 	(with-open-file (stream truepath)
 	  (handler-bind ((end-of-file (lambda (err)

@@ -129,7 +129,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	     ;;TODO restart with filename input from debugger
 	     (error need-conf-file-arg))
 	   (when (or (not overwrite)
-		     (fad:file-exists-p config-path))
+		     (uiop:file-exists-p config-path))
 					;TODO restart with overwrite
 	     (error file-exists)))
 	  (t (error conf-file-error)))
@@ -214,7 +214,7 @@ Return T if a project was found, NIL otherwise."
   (let (found-project)
     (setq found-project (find-instance-by-name project-id))
     (when (and (not found-project)
-	       (fad:file-exists-p project-id))
+	       (uiop:file-exists-p project-id))
       (setq found-project (find-instance-by-conf-file project-id)))
     (when found-project
       (stop-acceptors found-project)
@@ -223,23 +223,6 @@ Return T if a project was found, NIL otherwise."
 			 (eq found-project tested-inst))
 		       *project-instances*))
       t)))
-
-(defun fill-acceptors (project-state)
-  "Instantiate and start all acceptors in a project based on its PORTS config field."
-  (with-slots (ports acceptors static-content-path) project-state
-    (if acceptors (error "Will not fill non-empty ACCEPTORS field in PROJECT-STATE")
-	(dolist (port ports t)
-	  (push (hunchentoot:start (make-instance 'brac-acceptor
-				      :parent project-state
-				      :document-root static-content-path
-				      :port port))
-		acceptors)))))
-
-(defun stop-acceptors (project-state)
-  "Stop all acceptors in a project."
-  (with-slots (acceptors) project-state
-    (dotimes (i (length acceptors) t)
-      (hunchentoot:stop (pop acceptors)))))
 
 (defun show-running ()
   "Prints a list of running web projects."

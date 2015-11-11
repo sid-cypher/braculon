@@ -60,7 +60,7 @@
     (remhash view-name views)))
 
 (defmethod load-view-files ((state project-state))
-  (let ((view-src-files (cl-fad:list-directory (views-path state))))
+  (let ((view-src-files (uiop:directory-files (views-path state))))
     (dolist (filename view-src-files)
       (let ((source-file-forms (read-multiple-forms-file filename)))
 	(dolist (src-form source-file-forms)

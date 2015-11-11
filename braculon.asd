@@ -3,11 +3,9 @@
   :author "Evgeny Ilyushkin"
   :license "MIT"
   :depends-on (:alexandria
-	       :cl-fad
 	       :cl-ppcre
 	       :cl-who
-	       :trivial-timers
-               :hunchentoot)
+	       :trivial-timers)
   :components ((:file "package")
                (:static-file "LICENSE")
 	       (:file "util" :depends-on ("package"))

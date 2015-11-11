@@ -2,7 +2,7 @@
 
 (in-package :braculon)
 
-(defclass brac-controller ()
+(defclass brac-ctrl ()
   ((project-state :reader project-state
 		  :initarg :parent
 		  :initform (error "Please specify the project that will use this object.")
@@ -20,7 +20,7 @@
 	      :initform (get-universal-time)
 	      :documentation "")))
 
-(defmethod print-object ((ctrl brac-controller) stream)
+(defmethod print-object ((ctrl brac-ctrl) stream)
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
@@ -37,7 +37,7 @@
 (defgeneric load-controller-files (state)
   (:documentation ""))
 
-(defmethod add-controller ((state project-state) (ctrl brac-controller))
+(defmethod add-controller ((state project-state) (ctrl brac-ctrl))
   "" ;; TODO
   (with-slots (controllers controller-names) state
     (let ((ctrl-name (name ctrl)))
@@ -64,31 +64,34 @@
 	   nil))
 	(file-contents-ctrl-callable
 	 (lambda (req)
-	   (hunchentoot::handle-static-file (getf (router-data req) :file))))
+	   (clack.component:call
+	    (make-instance clack.app.file:<clack-app-file>
+			   :file (getf (router-data req) :file)
+			   :root (static-content-path state)))))
 	(http-code-ctrl-callable
 	 (lambda (req)
 	   nil)))
-    (add-controller state (make-instance 'brac-controller
+    (add-controller state (make-instance 'brac-ctrl
 					 :parent state
 					 :name "messages"
 					 :callable messages-ctrl-callable
 					 :source-file nil))
-    (add-controller state (make-instance 'brac-controller
+    (add-controller state (make-instance 'brac-ctrl
 					 :parent state
 					 :name "hello"
 					 :callable hello-ctrl-callable
 					 :source-file nil))
-    (add-controller state (make-instance 'brac-controller
+    (add-controller state (make-instance 'brac-ctrl
 					 :parent state
 					 :name "dir-index"
 					 :callable dir-index-ctrl-callable
 					 :source-file nil))
-    (add-controller state (make-instance 'brac-controller
+    (add-controller state (make-instance 'brac-ctrl
 					 :parent state
 					 :name "file-contents"
 					 :callable file-contents-ctrl-callable
 					 :source-file nil))
-    (add-controller state (make-instance 'brac-controller
+    (add-controller state (make-instance 'brac-ctrl
 					 :parent state
 					 :name "http code"
 					 :callable http-code-ctrl-callable
@@ -96,7 +99,7 @@
     t))
 
 (defmethod load-controller-files ((state project-state))
-  (let ((controller-src-files (cl-fad:list-directory (controllers-path state))))
+  (let ((controller-src-files (uiop:directory-files (controllers-path state))))
     (dolist (filename controller-src-files)
       (let ((source-file-forms (read-multiple-forms-file filename)))
 	(dolist (src-form source-file-forms)
@@ -125,7 +128,7 @@
 		      (eval `(lambda (,req-sym)
 			       ,@ctrl-body)))))
 	    (when ctrl-callable ;; TODO log this addition
-	      (add-controller state (make-instance 'brac-controller
+	      (add-controller state (make-instance 'brac-ctrl
 					       :parent state
 					       :name ctrl-name
 					       :callable ctrl-callable

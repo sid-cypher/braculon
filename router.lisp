@@ -2,20 +2,6 @@
 
 (in-package :braculon)
 
-(defclass brac-acceptor (hunchentoot:acceptor)
-  ((project-state :reader project-state
-		  :initarg :parent
-		  :initform (error "Please specify the project that will use this object.")
-		  :documentation ""))
-  (:default-initargs
-   :request-class 'brac-request))
-
-(defclass brac-request (hunchentoot:request)
-  ((router-data :accessor router-data
-		:initform '()
-		:documentation "")
-   (request-reply :reader request-reply)))
-
 (defclass brac-router ()
   ((project-state :reader project-state
 		  :initarg :parent
@@ -56,116 +42,12 @@
 ;;; TODO: check interference between process requests
 (defvar *request-interference* nil)
 
-(defun start-output (return-code &optional (content nil content-provided-p))
-  "Wrapper around Hunchentoot's"
-  (if content-provided-p (hunchentoot::start-output return-code content)
-      (hunchentoot::start-output return-code)))
-
-(defmethod process-request ((req brac-request))
-  "same as the Hunchentoot standard implementation, but with HANDLE-REQUEST
-replaced by ROUTE-REQUEST."
-  (catch 'hunchentoot::request-processed ; maybe thrown in START-OUTPUT to end request processing
-    (let (hunchentoot::*tmp-files* ;; TODO remove all traces of this
-	  hunchentoot::*headers-sent*
-	  (hunchentoot::*request* req))
-      (hunchentoot::with-mapped-conditions ()
-	(labels
-	    ;; TODO : Review logging mechanism
-	    ((report-error-to-client (error &optional backtrace)
-	       (when *log-lisp-errors-p*
-		 (log-message* *lisp-errors-log-level* "~A~@[~%~A~]" error (when *log-lisp-backtraces-p*
-									     backtrace)))
-	       ;; TODO: remember the error messages and route them to a fitting controller,
-	       ;; to be rendered in a more sophisticated way.
-	       (start-output +http-internal-server-error+
-			     (acceptor-status-message *acceptor* ;; TODO no specials plz
-						      +http-internal-server-error+
-						      :error (princ-to-string error)
-						      :backtrace (princ-to-string backtrace)))))
-	  (multiple-value-bind (contents error backtrace)
-	      ;; TODO: why skip dispatch if bad request? handle it.
-	      (catch 'hunchentoot::handler-done ; thrown on error within, otherwise bound values are nil.
-		(route-request req))
-	    ;; TODO better log handling
-	    (when error
-	      ;; error occurred in request handler
-	      (report-error-to-client error backtrace))
-	    (handler-case
-		(hunchentoot::with-debugger
-		    (start-output (return-code *reply*) ;; TODO: get rid of special vars
-				  (or contents
-				      (acceptor-status-message *acceptor*
-							       (return-code *reply*)))))
-	      (error (e)
-		;; error occurred while writing to the client.  attempt to report.
-		(report-error-to-client e)))))))))
-
-(defmethod route-request ((req brac-request))
-  "Offers the request to registered routers until one of them accepts or all of
-them refuse. Also sets up standard error handling which catches any errors
-within the handler."
-  (handler-bind ((error
-                  (lambda (cond)
-                    ;; if the headers were already sent, the error
-                    ;; happened within the body and we have to close
-                    ;; the stream
-                    (when hunchentoot::*headers-sent*
-                      (setq hunchentoot::*close-hunchentoot-stream* t))
-                    (throw 'hunchentoot::handler-done
-                      (values nil cond (hunchentoot::get-backtrace)))))
-		 ;; TODO: review logging mechanism
-                 (warning
-                  (lambda (cond)
-                    (when *log-lisp-warnings-p*
-                      (log-message* *lisp-warnings-log-level* "~A" cond)))))
-    (hunchentoot::with-debugger
-      ;; ACCEPTOR-DISPATCH-REQUEST was here.
-      ;; routers return nil or a controller name string
-      ;; controller returns a string or an octet array
-      ;; - return it here as well
-      ;; TODO: header overrides as second value
-      (let ((state (project-state (request-acceptor req)))
-	    chosen-controller-name
-	    reply-content)
-	(flet ((find-and-call (state req name opts)
-		 (let (working-router)
-		   (setf working-router (gethash (if (symbolp name)
-						     (string-downcase (symbol-name name))
-						     (the string name))
-						 (routers state)))
-		   (when working-router ;; TODO: log message if not found
-		     ;; TODO sanitize options
-		     (funcall (callable working-router) req opts)))))
-	  (loop for ordered-router-args in (routers-order state)
-	     while (not chosen-controller-name) do
-	       (cond ((or (symbolp ordered-router-args)
-			  (stringp ordered-router-args))
-		      (setf chosen-controller-name
-			    (find-and-call state req
-					   ordered-router-args nil)))
-		     ((consp ordered-router-args)
-		      (setf chosen-controller-name
-			    (find-and-call state req
-					   (first ordered-router-args)
-					   (rest ordered-router-args)))) ;; TODO
-		     ;; TODO fail more gracefully
-		     (t (error "Only symbols, strings and lists are allowed in order.conf"))))
-	  (when chosen-controller-name
-	    ;;TODO: reply headers manipulation by controllers' second value
-	    (setf reply-content
-		  (funcall (callable (gethash chosen-controller-name (controllers state)))
-			   req)))
-	  ;;TODO think of a sane fallback, push info through the log system
-	  (or reply-content
-	      (progn (setf (hunchentoot:return-code *reply*) +http-not-found+)
-		     "404 Not Found")))))))
-
 (defmethod load-builtin-routers ((state project-state))
   (let ((fixed-router-callable ;; TODO: with :regex t option
 	 (lambda (req options)
 	   (destructuring-bind (uri target &key data) options
 	     (when (and (stringp uri)
-			(string= (hunchentoot::script-name req) uri)
+					;(string= (lolwut req) uri)
 			(or (stringp target)
 			    (symbolp target)))
 	       (when (symbolp target)
@@ -181,18 +63,17 @@ within the handler."
 	       (setf url-prefix nil))
 	     (unless (pathnamep folder) ;; TODO as well
 	       (setf folder nil))
-	     (let ((static-files (delete-if #'cl-fad:directory-pathname-p
-					    (cl-fad:list-directory
-					     (if folder
-						 (merge-pathnames folder (static-content-path state))
-						 (static-content-path state)))))
+	     (let ((static-files (uiop:directory-files
+				  (if folder
+				      (merge-pathnames folder (static-content-path state))
+				      (static-content-path state))))
 		   (prefix (or url-prefix "/"))
 		   matchp)
 	       (setf (router-data req) nil)
 	       (loop for file in static-files
 		  while (not matchp) do
 		  ;; trailing slash :deny \(later :allow, :require)
-		    (when (string= (hunchentoot::script-name req)
+		    (when (string= (url-req-path-name req)
 				   (cat prefix (file-namestring file)))
 		      (setf (router-data req) (list :file file
 						    :data data))
@@ -261,7 +142,7 @@ within the handler."
       (setf order-form default-order))
     (setf (slot-value state 'routers-order) order-form))
 
-  (let ((router-src-files (cl-fad:list-directory (routers-path state))))
+  (let ((router-src-files (uiop:directory-files (routers-path state))))
     (dolist (filename router-src-files)
       (let ((source-file-forms (read-multiple-forms-file filename)))
 	(dolist (src-form source-file-forms)
