@@ -12,7 +12,7 @@ Main goal of the project is to provide all necessary infrastructure for your web
 ## Why braculon?
 
 - At the time of this writing, all (known to me) Clack-based frameworks use myway-based URL routing without giving you any convenient way to override default routing behavior.
-- Wrapping your app in an (currently undocumented) opaque "middlewares" hurts consistency, readability and modification ease.
+- Wrapping your app in (currently undocumented) opaque "middlewares" hurts readability, long-term consistency and modification ease.
 - Naming things is hard. Why not "braculon"?
 
 ## License

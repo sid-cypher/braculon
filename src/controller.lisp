@@ -64,10 +64,9 @@
 	   nil))
 	(file-contents-ctrl-callable
 	 (lambda (req)
-	   (clack.component:call
-	    (make-instance clack.app.file:<clack-app-file>
-			   :file (getf (router-data req) :file)
-			   :root (static-content-path state)))))
+	   (lack.component:call
+	    (lack.app.file:make-app :file (getf (router-data req) :file)
+			            :root (static-content-path state)))))
 	(http-code-ctrl-callable
 	 (lambda (req)
 	   nil)))
