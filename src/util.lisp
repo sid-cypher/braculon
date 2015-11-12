@@ -11,6 +11,10 @@
   "because \(concatenate 'string ...) is too much to type"
   `(concatenate 'string ,@bod))
 
+(defmacro mcat (&body bod)
+  "macroexpand-time cat for breaking up large texts into manageable pieces"
+  (apply #'concatenate 'string bod))
+
 (defmacro silence (&body bod)
   "mutes the stdout unless overridden"
   `(let ((*standard-output* (make-broadcast-stream)))

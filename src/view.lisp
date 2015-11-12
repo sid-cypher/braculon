@@ -3,9 +3,9 @@
 (in-package :braculon)
 
 (defclass brac-view ()
-  ((project-state :reader project-state
+  ((appstate :reader appstate
 		  :initarg :parent
-		  :initform (error "Please specify the project that will use this object.")
+		  :initform (error "Please specify the webapp that will use this object.")
 		  :documentation "")
    (name :reader name
 	 :initarg :name
@@ -47,19 +47,19 @@
 (defgeneric load-view-files (state)
   (:documentation ""))
 
-(defmethod add-view ((state project-state) (view brac-view))
+(defmethod add-view ((state brac-appstate) (view brac-view))
   "" ;; TODO
   (with-slots (views view-names) state
     (let ((view-name (name view)))
       (push view-name view-names)
       (setf (gethash view-name views) view))))
 
-(defmethod del-view ((state project-state) view-name)
+(defmethod del-view ((state brac-appstate) view-name)
   (with-slots (views view-names) state
     (remove view-name view-names :test #'string=)
     (remhash view-name views)))
 
-(defmethod load-view-files ((state project-state))
+(defmethod load-view-files ((state brac-appstate))
   (let ((view-src-files (uiop:directory-files (views-path state))))
     (dolist (filename view-src-files)
       (let ((source-file-forms (read-multiple-forms-file filename)))

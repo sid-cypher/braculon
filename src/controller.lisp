@@ -3,9 +3,9 @@
 (in-package :braculon)
 
 (defclass brac-ctrl ()
-  ((project-state :reader project-state
+  ((appstate :reader appstate
 		  :initarg :parent
-		  :initform (error "Please specify the project that will use this object.")
+		  :initform (error "Please specify the webapp that will use this object.")
 		  :documentation "")
    (name :reader name
 	 :initarg :name
@@ -37,19 +37,19 @@
 (defgeneric load-controller-files (state)
   (:documentation ""))
 
-(defmethod add-controller ((state project-state) (ctrl brac-ctrl))
+(defmethod add-controller ((state brac-appstate) (ctrl brac-ctrl))
   "" ;; TODO
   (with-slots (controllers controller-names) state
     (let ((ctrl-name (name ctrl)))
       (push ctrl-name controller-names)
       (setf (gethash ctrl-name controllers) ctrl))))
 
-(defmethod del-controller ((state project-state) ctrl-name)
+(defmethod del-controller ((state brac-appstate) ctrl-name)
   (with-slots (controllers controller-names) state
     (remove ctrl-name controller-names :test #'string=)
     (remhash ctrl-name controllers)))
 
-(defmethod load-builtin-controllers ((state project-state))
+(defmethod load-builtin-controllers ((state brac-appstate))
   (let ((messages-ctrl-callable
 	 (lambda (req)
 	   nil))
@@ -97,7 +97,7 @@
 					 :source-file nil))
     t))
 
-(defmethod load-controller-files ((state project-state))
+(defmethod load-controller-files ((state brac-appstate))
   (let ((controller-src-files (uiop:directory-files (controllers-path state))))
     (dolist (filename controller-src-files)
       (let ((source-file-forms (read-multiple-forms-file filename)))

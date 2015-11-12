@@ -3,10 +3,10 @@
 (in-package :braculon)
 
 (defclass brac-router ()
-  ((project-state :reader project-state
-		  :initarg :parent
-		  :initform (error "Please specify the project that will use this object.")
-		  :documentation "")
+  ((appstate :reader appstate
+	     :initarg :parent
+	     :initform (error "Please specify the webapp that will use this object.")
+	     :documentation "")
    (name :reader name
 	 :initarg :name
 	 :documentation "")
@@ -42,7 +42,7 @@
 ;;; TODO: check interference between process requests
 (defvar *request-interference* nil)
 
-(defmethod load-builtin-routers ((state project-state))
+(defmethod load-builtin-routers ((state brac-appstate))
   (let ((fixed-router-callable ;; TODO: with :regex t option
 	 (lambda (req options)
 	   (destructuring-bind (uri target &key data) options
@@ -108,19 +108,19 @@
 				     :source-file nil))
     t))
 
-(defmethod add-router ((state project-state) (rtr brac-router))
+(defmethod add-router ((state brac-appstate) (rtr brac-router))
   "" ;; TODO
   (with-slots (routers router-names) state
     (let ((rtr-name (name rtr)))
       (push rtr-name router-names)
       (setf (gethash rtr-name routers) rtr))))
 
-(defmethod del-router ((state project-state) rtr-name)
+(defmethod del-router ((state brac-appstate) rtr-name)
   (with-slots (routers router-names) state
     (remove rtr-name router-names :test #'string=)
     (remhash rtr-name routers)))
 
-(defmethod load-router-files ((state project-state))
+(defmethod load-router-files ((state brac-appstate))
   (let ((default-order '(braculon::static braculon::dynamic (braculon::fixed "/" "index")))
 	(order-file (merge-pathnames #p"order.conf" (routers-path state)))
 	order-form)

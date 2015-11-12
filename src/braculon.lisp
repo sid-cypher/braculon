@@ -1,10 +1,25 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Base: 10 -*-
-
 (in-package :braculon)
 
-(defconstant version-major 0)
-(defconstant version-minor 1)
-(defconstant version-revision 1)
+;; get current version from the system definition file
+(macrolet ((define-version-constants ()
+	     (let* ((asd-form (uiop:with-safe-io-syntax (:package :braculon)
+				(with-open-file (s (asdf:system-source-file :braculon)
+						   :if-does-not-exist :error)
+				  (read s))))
+		    (version-string (getf (cddr asd-form) :version))
+		    (version-list (map 'list
+				       #'parse-integer
+				       (cl-ppcre:split "\\." version-string
+						       :end (min 8 (length version-string))
+						       :limit 3 :sharedp t))))
+	       (when (> 3 (length version-list))
+		 (error "Could not parse :VERSION as major.minor.revision in braculon.asd"))
+	       (progn
+		 (defconstant version-major (first version-list))
+		 (defconstant version-minor (second version-list))
+		 (defconstant version-revision (third version-list))))))
+  (define-version-constants))
+
 
 (define-constant conf-file-error
   "While a web project must be associated with a config file at all times, neither filename nor a
@@ -18,98 +33,71 @@ filename-specifying form was found in the provided :config argument." :test #'st
 (define-constant config-list-wrong-head
   "Config file must begin with a \"braculon-settings\" as the title or a parenthesised list." :test #'string=)
 
-(defvar *project-instances* '() "launched web projects with separate configs")
+(defvar *brac-apps* '() "launched web projects with separate configs")
+;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
 (defclass state ()
   ())
 
-(defclass project-state (state)
+(defclass brac-appstate (state)
   ((name :reader name
+	 :type 'string
 	 :initform "[unnamed]"
 	 :documentation "")
-   (config-file :reader config-file
-		:initform nil
-		:documentation "")
-   (ports :reader ports
-	  :initform '()
-	  :documentation "")
-   (acceptors :reader acceptors
-	      :initform '()
+   (is-running-p :reader is-running-p
+		 :type 'boolean
+		 :initform nil
+		 :documentation "")
+   (root-path :reader project-root
 	      :documentation "")
-   (routers :reader routers
-	    :initform (make-hash-table :test 'equal)
-	    :documentation "")
-   (router-names :reader router-names
-	    :initform '()
-	    :documentation "")
-   (routers-order :reader routers-order
+   (config-file :reader config-file
+		:documentation "")
+   (routes :reader routes
+	   :initform (make-hash-table :test 'equal)
+	   :documentation "")
+   (routing-chain :reader routing-chain
 		  :initform '()
 		  :documentation "")
    (controllers :reader controllers
 		:initform (make-hash-table :test 'equal)
 		:documentation "")
-   (controller-names :reader controller-names
-		:initform '()
-		:documentation "")
+   (view-compilers :reader view-compilers
+		   :initform (make-hash-table :test 'equal)
+		   :documentation "")
    (views :reader views
 	  :initform (make-hash-table :test 'equal)
 	  :documentation "")
-   (view-names :reader view-names
-	  :initform '()
-	  :documentation "")
-   (project-root :reader project-root
-		 :initform nil
-		 :documentation "")
    (static-content-path :reader static-content-path
-			:initform nil
 			:documentation "")
-   (dynamic-content-path :reader dynamic-content-path
-			 :initform nil
-			 :documentation "")
-   (controllers-path :reader controllers-path
-		     :initform nil
-		     :documentation "")
-   (routers-path :reader routers-path
-		:initform nil
+   (routes-path :reader routes-path
 		:documentation "")
+   (controllers-path :reader controllers-path
+		     :documentation "")
    (views-path :reader views-path
-	       :initform nil
 	       :documentation "")
-   (use-src :reader use-src
-	    :initform nil
-	    :documentation "")
-   (src-path :reader src-path
-	     :initform nil
-	     :documentation "")
-   (allow-read-eval :reader allow-read-eval
-		    :initform nil
-		    :documentation "")
-   (config-print-case :reader config-print-case
-		      :initform :downcase
-		      :documentation "")
-   (render-who-include-symbol :reader render-who-include-symbol
-			      :initform 'include
-			      :documentation "")
+   (view-compilers-path :reader view-compilers-path
+			:documentation "")
+   (extensions :initform (make-hash-table :test 'eq)
+	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
    (launch-time :reader launch-time
 		:documentation ""))
-  (:documentation ""))
+  (:documentation "This object represents a web app and holds its settings.
+You can pass an instance of this object to clack:clackup, as the necessary call method has already been defined for it."))
 
-(defmethod print-object ((state project-state) stream)
-  (print-unreadable-object (state stream :type t)
-    (format stream "~A" (name state))))
-
-(defgeneric write-config (project-state)
-  (:documentation ""))
+(defmethod print-object ((state brac-appstate) stream)
+  (print-unreadable-object (state stream :type t :identity t)
+    (format stream "\"~A\" ~A"
+	    (name state)
+	    (if (is-running-p state) "running"
+		"stopped"))))
 
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)
   (declare (type string value))
   (setf (slot-value object 'name) value))
 
-(defun (setf ports) (value object)
-  (setf (slot-value object 'ports) value))
-
+;; TODO change to settings.conf.lisp specs
 (defun load-config-file-settings (config overwrite)
   (let (config-form config-path)
     (cond ((pathnamep config)
@@ -136,11 +124,12 @@ filename-specifying form was found in the provided :config argument." :test #'st
     (values config-form config-path)))
 
 
-(defun fill-slots-with-config-file-settings (config-form config-path project-state)
+;; TODO yeah all the slots have changed, need to fix this one, too
+(defun fill-slots-with-config-file-settings (config-form config-path brac-appstate)
   (with-slots (name config-file ports project-root static-content-path
 		    dynamic-content-path routers-path controllers-path
 		    views-path use-src src-path allow-read-eval config-print-case
-		    render-who-include-symbol) project-state
+		    render-who-include-symbol) brac-appstate
     (let (rootpath)
       (setf rootpath (getf config-form :project-root))
       ;; TODO: thoroughly check user inputs from config file
@@ -169,7 +158,8 @@ filename-specifying form was found in the provided :config argument." :test #'st
        config-print-case (getf config-form :config-print-case)
        render-who-include-symbol (getf config-form :render-who-include-symbol)))))
 
-(defmethod initialize-instance :after ((state project-state) &key config overwrite)
+;; TODO init from new conf
+(defmethod initialize-instance :after ((state brac-appstate) &key config overwrite)
   (let (config-form config-path)
     ;;make sure we have both config data and a file to keep it there.
     (multiple-value-setq (config-form config-path)
@@ -182,47 +172,17 @@ filename-specifying form was found in the provided :config argument." :test #'st
     (load-controller-files state)
     (load-view-files state)))
 
-(defun find-instance-by-conf-file (conf-filepath)
-  (find-if (lambda (tested-inst)
-	     (equal conf-filepath (config-file tested-inst))) *project-instances*))
-
-(defun find-instance-by-name (name)
-  (declare (type string name))
-    (find-if (lambda (tested-inst)
-	       (string= name (name tested-inst))) *project-instances*))
-
-(defun wizard (&key config-file name ports) ;;TODO more keys
-  "Interactively create a new web project."
+;; TODO summoning skeletons
+(defun wizard (path-to-app)
+  "Answer the questions of the Wizard of Braculon and behold his wondrous magic."
   nil)
 
-(defun launch (config &key overwrite)
-  ;; TODO optional config, wizard on *query-io*
-  (let ((obj (make-instance 'project-state :config config :overwrite overwrite)))
-    ;; TODO somehow warn if already launched
-    (unless (or (not obj)
-		 (find-instance-by-conf-file (config-file obj))
-		 (find-instance-by-name (name obj)))
-      (push obj *project-instances*)
-      (fill-acceptors obj)
-      (setf (slot-value obj 'launch-time) (get-universal-time))
-      (name obj))))
+;; TODO optional config, wizard on *query-io*
+(defmethod start (appstate &key if-running)
+  nil)
 
-(defun finish (project-id)
-  "Uses a name or a config file path of a launched project to finish it.
-Return T if a project was found, NIL otherwise."
-  (declare (type (or string pathname) project-id))
-  (let (found-project)
-    (setq found-project (find-instance-by-name project-id))
-    (when (and (not found-project)
-	       (uiop:file-exists-p project-id))
-      (setq found-project (find-instance-by-conf-file project-id)))
-    (when found-project
-      (stop-acceptors found-project)
-      (setq *project-instances*
-	    (delete-if (lambda (tested-inst)
-			 (eq found-project tested-inst))
-		       *project-instances*))
-      t)))
+(defmethod stop (appstate)
+  nil)
 
 (defun show-running ()
   "Prints a list of running web projects."
@@ -231,11 +191,7 @@ Return T if a project was found, NIL otherwise."
     ;; TODO: uptime
     namelist))
 
-(defmethod state-report ((state project-state))
+(defmethod state-report ((state brac-appstate))
   ;;TODO
-  (format t
-	  "Test report for ~A:~% Config file: ~A~% Acceptors: (~{~A~^ ~})~%"
-	  state
-	  (config-file state)
-	  (acceptors state)))
+  nil)
 
