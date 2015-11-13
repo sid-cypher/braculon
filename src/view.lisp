@@ -4,12 +4,18 @@
 
 (defclass brac-view ()
   ((appstate :reader appstate
-		  :initarg :parent
-		  :initform (error "Please specify the webapp that will use this object.")
-		  :documentation "")
+	     :initarg :parent
+	     :initform (error "View object needs a parent appstate.")
+	     :documentation "")
    (name :reader name
 	 :initarg :name
 	 :documentation "")
+   (fields :reader fields
+	   :initarg '()
+	   :documentation "A list of field name keywords.")
+   (dependencies :reader dependencies
+		 :initarg '()
+		 :documentation "A list of direct dependencies of this view, name strings.")
    (renderable :reader renderable
 	       :initarg :renderable
 	       :documentation "")
@@ -20,71 +26,55 @@
 	      :initform (get-universal-time)
 	      :documentation "")))
 
-;; TODO: make and use this
-(defclass brac-composed-view (brac-view)
-  nil
-  (:documentation "Assembled by recursively including other views,
- used to do the tree walk once and cache the results."))
-
-(defclass brac-view-data () ;; create in a controller, pass to RENDER-WHO
-  ((var-names :reader var-names
-	      :initarg :var-names
-	      :documentation "string list")
-   (var-values :reader var-values
-	       :initarg :var-values
-	       :documentation "hashtable")))
-
 (defmethod print-object ((view brac-view) stream)
   (print-unreadable-object (view stream :type t)
     (format stream "~A" (name view))))
 
+;; TODO write, with hooks later
 (defgeneric add-view (state view)
+  (:method ((state brac-appstate) (view brac-view))
+    "" ;; TODO
+    nil)
   (:documentation ""))
 
+;; TODO hooks
 (defgeneric del-view (state view-name)
+  (:method ((state brac-appstate) view-name)
+    (declare (type string view-name))
+    (with-slots (views) state
+      (remhash view-name views)))
   (:documentation ""))
 
+;; TODO review file format, rewrite
 (defgeneric load-view-files (state)
+  (:method ((state brac-appstate))
+    (let ((view-src-files (uiop:directory-files (views-path state))))
+      (dolist (filename view-src-files)
+	(let ((source-file-forms (read-multiple-forms-file filename)))
+	  (dolist (src-form source-file-forms)
+	    (let* ((fcall-symbol (when (consp src-form)
+				   (pop src-form)))
+		   (view-name (when (consp src-form)
+				(pop src-form)))
+		   (view-body (when (consp src-form)
+				src-form))
+		   view-renderable) ;; TODO report errors
+	      (when (and (symbolp fcall-symbol)
+			 (string= (symbol-name fcall-symbol) "DEFVIEW")
+			 (or (stringp view-name)
+			     (symbolp view-name))
+			 view-body)
+		(setf view-name (safe-name-symbol-to-string view-name))
+		(setf view-renderable view-body))
+	      (when view-renderable ;; TODO log this addition
+		(add-view state (make-instance 'brac-view
+					       :parent state
+					       :name view-name
+					       :renderable view-renderable
+					       :source-file filename)))))))))
   (:documentation ""))
 
-(defmethod add-view ((state brac-appstate) (view brac-view))
-  "" ;; TODO
-  (with-slots (views view-names) state
-    (let ((view-name (name view)))
-      (push view-name view-names)
-      (setf (gethash view-name views) view))))
-
-(defmethod del-view ((state brac-appstate) view-name)
-  (with-slots (views view-names) state
-    (remove view-name view-names :test #'string=)
-    (remhash view-name views)))
-
-(defmethod load-view-files ((state brac-appstate))
-  (let ((view-src-files (uiop:directory-files (views-path state))))
-    (dolist (filename view-src-files)
-      (let ((source-file-forms (read-multiple-forms-file filename)))
-	(dolist (src-form source-file-forms)
-	  (let* ((fcall-symbol (when (consp src-form)
-				 (pop src-form)))
-		 (view-name (when (consp src-form)
-			      (pop src-form)))
-		 (view-body (when (consp src-form)
-			      src-form))
-		 view-renderable) ;; TODO report errors
-	    (when (and (symbolp fcall-symbol)
-		       (string= (symbol-name fcall-symbol) "DEFVIEW")
-		       (or (stringp view-name)
-			   (symbolp view-name))
-		       view-body)
-	      (setf view-name (safe-name-symbol-to-string view-name))
-	      (setf view-renderable view-body))
-	    (when view-renderable ;; TODO log this addition
-	      (add-view state (make-instance 'brac-view
-					     :parent state
-					     :name view-name
-					     :renderable view-renderable
-					     :source-file filename)))))))))
-
+;; TODO: move to view-compilers, lack.util::find-package-or-load might be useful for deps.
 (defun render-who (view-name view-data &key if-var-unused if-var-missing cache depth-limit)
   (setf (html-mode) :html5)
   (let (view
@@ -95,18 +85,3 @@
     ;;   (with-html-output-to-string (*standard-output* nil :prologue nil :indent t)
 
     ))
-
-(defmacro with-data-collected-into (bindings result-object &body body)
-  "BINDINGS is a list of variables to be used in the view, and RESULT-OBJECT"
-  nil) ;;TODO
-
-#+nil (defun make-view-data-collection ()
-  "a closure with a property list and a push-pull iface"
-  ;; TODO enforce symbol type, keyword package
-  (let (plist)
-    (lambda (&optional symbol value)
-      (if symbol
-	  (if value
-	      (setf (getf plist symbol) value)
-	      (getf plist symbol))
-	  plist))))

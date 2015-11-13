@@ -37,10 +37,10 @@ filename-specifying form was found in the provided :config argument." :test #'st
 ;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
-(defclass state ()
+(defclass brac-corestate ()
   ())
 
-(defclass brac-appstate (state)
+(defclass brac-appstate (brac-corestate)
   ((name :reader name
 	 :type 'string
 	 :initform "[unnamed]"
@@ -53,7 +53,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	      :documentation "")
    (config-file :reader config-file
 		:documentation "")
-   (routes :reader routes
+   (routers :reader routers
 	   :initform (make-hash-table :test 'equal)
 	   :documentation "")
    (routing-chain :reader routing-chain
@@ -70,7 +70,7 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	  :documentation "")
    (static-content-path :reader static-content-path
 			:documentation "")
-   (routes-path :reader routes-path
+   (routers-path :reader routers-path
 		:documentation "")
    (controllers-path :reader controllers-path
 		     :documentation "")
@@ -178,10 +178,10 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   nil)
 
 ;; TODO optional config, wizard on *query-io*
-(defmethod start (appstate &key if-running)
+(defmethod start ((state brac-appstate) &key if-running)
   nil)
 
-(defmethod stop (appstate)
+(defmethod stop ((state brac-appstate))
   nil)
 
 (defun show-running ()
