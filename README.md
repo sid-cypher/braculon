@@ -3,12 +3,10 @@
 ## What is it?
 Clack-based modular web framework with most flexible request routing.
 
-WARNING: this is not even its final form.
+**WARNING**: this is not even its final form.
 Do not use for anything but throwaway projects.
 
-Main goal of the project is to provide all necessary infrastructure for your web app
- without getting in your way, and to make sure you have full and absolute control
- over your HTTP(S) request processing.
+My main goal for `braculon` is to provide all necessary infrastructure for your web app without getting in your way, and to make sure you have full and absolute control over your HTTP(S) request processing.
 
 ## Why would I want it?
 

@@ -92,6 +92,11 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	    (if (is-running-p state) "running"
 		"stopped"))))
 
+(defmethod lack.component:to-app ((state brac-appstate))
+  "This method is called by Clack to get a callback function that will be used for each incoming HTTP request to your app."
+  (lambda (env)
+    (format t "state: ~A~%env: ~A~%" state env)))
+
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)
   (declare (type string value))
@@ -162,15 +167,16 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 (defmethod initialize-instance :after ((state brac-appstate) &key config overwrite)
   (let (config-form config-path)
     ;;make sure we have both config data and a file to keep it there.
-    (multiple-value-setq (config-form config-path)
-      (load-config-file-settings config overwrite))
-    (fill-slots-with-config-file-settings config-form config-path state)
+    ;;(multiple-value-setq (config-form config-path)
+      ;;(load-config-file-settings config overwrite))
+    ;;(fill-slots-with-config-file-settings config-form config-path state)
     ;; TODO: maybe load views
-    (load-builtin-routers state)
-    (load-builtin-controllers state)
-    (load-router-files state)
-    (load-controller-files state)
-    (load-view-files state)))
+    ;;(load-builtin-routers state)
+    ;;(load-builtin-controllers state)
+    ;;(load-router-files state)
+    ;;(load-controller-files state)
+    ;;(load-view-files state)
+    ))
 
 ;; TODO summoning skeletons
 (defun wizard (path-to-app)

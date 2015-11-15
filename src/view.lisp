@@ -11,10 +11,12 @@
 	 :initarg :name
 	 :documentation "")
    (fields :reader fields
-	   :initarg '()
+	   :initarg :fields
+	   :initform '()
 	   :documentation "A list of field name keywords.")
    (dependencies :reader dependencies
-		 :initarg '()
+		 :initarg :dependencies
+		 :initform '()
 		 :documentation "A list of direct dependencies of this view, name strings.")
    (renderable :reader renderable
 	       :initarg :renderable
