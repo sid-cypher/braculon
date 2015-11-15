@@ -14,10 +14,11 @@
 						       :limit 3 :sharedp t))))
 	       (when (> 3 (length version-list))
 		 (error "Could not parse :VERSION as major.minor.revision in braculon.asd"))
-	       (progn
-		 (defconstant version-major (first version-list))
-		 (defconstant version-minor (second version-list))
-		 (defconstant version-revision (third version-list))))))
+	       `(progn
+		  (defconstant version-major ,(first version-list))
+		  (defconstant version-minor ,(second version-list))
+		  (defconstant version-revision ,(third version-list))
+		  t))))
   (define-version-constants))
 
 
