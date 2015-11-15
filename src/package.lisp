@@ -1,10 +1,10 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Base: 10 -*-
-
 (defpackage :braculon
   (:nicknames :brac)
-  (:use :cl :alexandria :cl-ppcre :cl-who)
+  (:use :cl :alexandria :cl-who)
   (:export
-   #:launch
-   #:finish
-   #:show-running
-   #:state-report))
+   #:start
+   #:stop
+   #:wizard))
+
+(defpackage :brac-conf
+  (:documentation "Symbols read by braculon from config files are put into this package."))

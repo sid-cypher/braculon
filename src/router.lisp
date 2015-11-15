@@ -9,9 +9,11 @@
 	     :documentation "")
    (name :reader name
 	 :initarg :name
+	 :initform (error "Router object needs a name.")
 	 :documentation "")
    (callable :reader callable
 	     :initarg :callable
+	     :initform (error "Router object needs its callable part.")
 	     :documentation "")
    (source-file :reader source-file
 		:initarg :source-file
@@ -24,18 +26,21 @@
   (print-unreadable-object (rtr stream :type t)
     (format stream "~A" (name rtr))))
 
-(defgeneric route-request (request)
+(defgeneric chain-route-request (state env)
   (:documentation "o hai, i send off reqs thru routing tubez"))
 
-;;TODO rewrite
+;;TODO add hooks
 (defgeneric add-router (state rtr)
   (:method ((state brac-appstate) (rtr brac-router))
-    "" ;; TODO
-    nil)
+    ""
+    (with-slots (routers) state
+      (setf (gethash (name rtr) routers) rtr)))
   (:documentation ""))
 
+;;TODO add hooks
 (defgeneric del-router (state rtr-name)
   (:method ((state brac-appstate) rtr-name)
+    ""
     (declare (type string rtr-name))
     (with-slots (routers) state
       (remhash rtr-name routers)))
@@ -44,10 +49,15 @@
 (defgeneric load-builtin-routers (state)
   (:method ((state brac-appstate))
     (let ((fixed-router-callable ;; TODO: with :regex t option
-	   (lambda (clack-http-req)
+	   (lambda (env)
 	     nil))
+	  (test-router-callable
+	   (lambda (env)
+	     `(200
+	       (:content-type "text/plain; charset=UTF-8")
+	       ,(list (format nil "state: ~A~%env: ~A~%" state env)))))
 	  (static-file-router-callable
-	   (lambda (clack-http-req) ;; TODO: build-folder-index, recursive, separator, controller
+	   (lambda (env) ;; TODO: build-folder-index, recursive, separator, controller
 
 
 	     ;; ===old===
@@ -77,29 +87,34 @@
 
 	     ))
 	  (code-router-callable
-	   (lambda (req options)
+	   (lambda (env)
 	     nil))
 	  (redirect-router-callable
-	   (lambda (req options)
+	   (lambda (env)
 	     nil)))
       (add-router state (make-instance 'brac-router
 				      :parent state
-				      :name "fixed"
+				      :name 'brac-conf::fixed
 				      :callable fixed-router-callable
 				      :source-file nil))
       (add-router state (make-instance 'brac-router
 				      :parent state
-				      :name "static"
+				      :name 'brac-conf::test
+				      :callable test-router-callable
+				      :source-file nil))
+      (add-router state (make-instance 'brac-router
+				      :parent state
+				      :name 'brac-conf::static
 				      :callable static-file-router-callable
 				      :source-file nil))
       (add-router state (make-instance 'brac-router
 				      :parent state
-				      :name "code"
+				      :name 'brac-conf::code
 				      :callable code-router-callable
 				      :source-file nil))
       (add-router state (make-instance 'brac-router
 				      :parent state
-				      :name "redirect"
+				      :name 'brac-conf::redirect
 				      :callable redirect-router-callable
 				      :source-file nil))
       t))
@@ -168,3 +183,6 @@
 						:callable rtr-callable
 						:source-file filename)))))))))
   (:documentation ""))
+
+(defmethod call ((rtr brac-router) env)
+  (funcall (callable brac-router) env))

@@ -58,12 +58,12 @@
 (defun read-form-file (filepath)
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
-    (if (not truepath) nil
-	;;TODO push a message through event logging system
-	(ignore-errors
-	  (with-open-file (stream truepath)
-	    (read stream :eof-value nil))))))
+    ;;TODO push a message through event logging system, log errors
+    (uiop:with-safe-io-syntax (:package :brac-conf)
+      (with-open-file (stream truepath)
+	(read stream :eof-value nil)))))
 
+;; TODO read safely
 (defun read-multiple-forms-file (filepath)
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))

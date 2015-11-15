@@ -22,17 +22,20 @@
   (define-version-constants))
 
 
-(define-constant conf-file-error
-  "While a web project must be associated with a config file at all times, neither filename nor a
-filename-specifying form was found in the provided :config argument." :test #'string=)
-(define-constant form-read-error
+(define-constant +form-read-error+
   "Failed to extract data from file." :test #'string=)
-(define-constant need-conf-file-arg
+(define-constant +need-conf-file-arg+
   "A filename is required to write the config file." :test #'string=)
-(define-constant file-exists
-  "File with that name already exists and the overwrite flag is not set." :test #'string=)
-(define-constant config-list-wrong-head
-  "Config file must begin with a \"braculon-settings\" as the title or a parenthesised list." :test #'string=)
+(define-constant +config-list-wrong-head+
+  "Config file must begin with an \"app-config\" as the first element of a list." :test #'string=)
+(define-constant +root-path-doesnt-exist+
+  "Directory ~A does not exist." :test #'string=)
+(define-constant +connecting-clack+
+  "Connecting app (~A) to server via Clack.~%" :test #'string=)
+(define-constant +conf-dirs-subpaths+
+   "One or more paths in app-config do not exist or are not subpaths of root." :test #'string=)
+(define-constant +init-appstate-with-rootpath+
+   "Please specify the path to your app dir with the :ROOT-PATH key." :test #'string=)
 
 (defvar *brac-apps* '() "launched web projects with separate configs")
 ;; TODO: move inside brac-appstate maybe?
@@ -50,27 +53,25 @@ filename-specifying form was found in the provided :config argument." :test #'st
 		 :type 'boolean
 		 :initform nil
 		 :documentation "")
-   (root-path :reader project-root
+   (root-path :reader root-path
 	      :documentation "")
    (config-file :reader config-file
 		:documentation "")
    (routers :reader routers
-	   :initform (make-hash-table :test 'equal)
+	   :initform (make-hash-table :test 'eq)
 	   :documentation "")
    (routing-chain :reader routing-chain
 		  :initform '()
 		  :documentation "")
    (controllers :reader controllers
-		:initform (make-hash-table :test 'equal)
+		:initform (make-hash-table :test 'eq)
 		:documentation "")
    (view-compilers :reader view-compilers
-		   :initform (make-hash-table :test 'equal)
+		   :initform (make-hash-table :test 'eq)
 		   :documentation "")
    (views :reader views
-	  :initform (make-hash-table :test 'equal)
+	  :initform (make-hash-table :test 'eq)
 	  :documentation "")
-   (static-content-path :reader static-content-path
-			:documentation "")
    (routers-path :reader routers-path
 		:documentation "")
    (controllers-path :reader controllers-path
@@ -79,6 +80,10 @@ filename-specifying form was found in the provided :config argument." :test #'st
 	       :documentation "")
    (view-compilers-path :reader view-compilers-path
 			:documentation "")
+   (verbose :type boolean
+	    :reader verbosep
+	    :initform t
+	    :documentation "")
    (extensions :initform (make-hash-table :test 'eq)
 	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
    (launch-time :reader launch-time
@@ -93,89 +98,91 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	    (if (is-running-p state) "running"
 		"stopped"))))
 
+(defgeneric call (object env))
+
 (defmethod lack.component:to-app ((state brac-appstate))
   "This method is called by Clack to get a callback function that will be used for each incoming HTTP request to your app."
+  (when (verbosep state)
+    (format t +connecting-clack+ (name state)))
   (lambda (env)
-    (format t "state: ~A~%env: ~A~%" state env)))
+    `(200
+      (:content-type "text/plain; charset=UTF-8")
+      ,(list (format nil "state: ~A~%env: ~A~%" state env)))))
 
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)
   (declare (type string value))
   (setf (slot-value object 'name) value))
 
-;; TODO change to settings.conf.lisp specs
-(defun load-config-file-settings (config overwrite)
+(defun load-config-file-settings (root-path)
+  (declare (type pathname root-path))
+  (unless (uiop:directory-exists-p root-path)
+    (error +root-path-doesnt-exist+ root-path))
   (let (config-form config-path)
-    (cond ((pathnamep config)
-	   (setf config-path config)
-	   ;; TODO restarts for all the reader conditions
-	   (setf config-form (read-form-file config))
-	   (unless config-form
-	     (error "~A~%~A" form-read-error conf-file-error))
-	   (unless (string= (symbol-name (first config-form))
-			    (string-upcase "braculon-settings"))
-	     (error config-list-wrong-head))
-	   (setf config-form (rest config-form)))
-	  ((consp config)
-	   (setf config-form config)
-	   (setf config-path (getf config-form :config-file))
-	   (unless config-path
-	     ;;TODO restart with filename input from debugger
-	     (error need-conf-file-arg))
-	   (when (or (not overwrite)
-		     (uiop:file-exists-p config-path))
-					;TODO restart with overwrite
-	     (error file-exists)))
-	  (t (error conf-file-error)))
+    (setf config-path (uiop:merge-pathnames* #p"settings.conf.lisp" root-path))
+    (setf config-form (read-form-file config-path))
+    ;; TODO better read-form-file error handling
+    (unless config-form
+      (error "~A~%" +form-read-error+))
+    (unless (string= (symbol-name (first config-form))
+		     (string-upcase "app-config"))
+      (error +config-list-wrong-head+))
+    (setf config-form (rest config-form))
     (values config-form config-path)))
 
-
-;; TODO yeah all the slots have changed, need to fix this one, too
-(defun fill-slots-with-config-file-settings (config-form config-path brac-appstate)
-  (with-slots (name config-file ports project-root static-content-path
-		    dynamic-content-path routers-path controllers-path
-		    views-path use-src src-path allow-read-eval config-print-case
-		    render-who-include-symbol) brac-appstate
-    (let (rootpath)
-      (setf rootpath (getf config-form :project-root))
-      ;; TODO: thoroughly check user inputs from config file
+(defun fill-slots-with-config-file-settings (config-form config-path given-root-path appstate)
+  (with-slots (name root-path config-file routing-chain routers-path
+		    controllers-path views-path view-compilers-path extensions verbose) appstate
+    ;; TODO: thoroughly check user inputs from config file
+    (let ((r-path (uiop:merge-pathnames*
+		   (getf config-form :routers-path #p"routers/") given-root-path))
+	  (c-path (uiop:merge-pathnames*
+		   (getf config-form :controllers-path #p"controllers/") given-root-path))
+	  (v-path (uiop:merge-pathnames*
+		   (getf config-form :views-path #p"views/") given-root-path))
+	  (vc-path (uiop:merge-pathnames*
+		    (getf config-form :view-compilers-path #p"viewcc/") given-root-path)))
+      (macrolet ((test-paths (symlist)
+		   (let (testcode)
+		     ;; repeat testing code snippet for all paths.
+		     (dolist (x-path symlist)
+		       (let ((subpath (gensym)))
+			 (push `(let ((,subpath (uiop:subpathp ,x-path given-root-path)))
+				  (unless (and (pathname-directory ,subpath)
+					       (ensure-directories-exist ,x-path :verbose t))
+				    (error +conf-dirs-subpaths+)))
+			       testcode)))
+		     (push 'progn testcode))))
+	(test-paths
+	 (r-path c-path v-path vc-path)))
       (setf
        name (let ((raw-name (getf config-form :name)))
 	      (if (symbolp raw-name)
 		  (string-downcase (symbol-name raw-name))
 		  (format nil "~A" raw-name)))
+       root-path given-root-path
        config-file config-path
-       ports (getf config-form :ports)
-       project-root (ensure-directories-exist rootpath)
-       static-content-path (ensure-directories-exist (merge-pathnames
-						      (getf config-form :static-content-path) rootpath))
-       dynamic-content-path (ensure-directories-exist (merge-pathnames
-						       (getf config-form :dynamic-content-path) rootpath))
-       routers-path (ensure-directories-exist (merge-pathnames
-					       (getf config-form :routers-path) rootpath))
-       controllers-path (ensure-directories-exist (merge-pathnames
-						   (getf config-form :controllers-path) rootpath))
-       views-path (ensure-directories-exist (merge-pathnames
-					     (getf config-form :views-path) rootpath))
-       use-src (getf config-form :use-src)
-       src-path (ensure-directories-exist (merge-pathnames
-					   (getf config-form :src-path) rootpath))
-       allow-read-eval (getf config-form :allow-read-eval)
-       config-print-case (getf config-form :config-print-case)
-       render-who-include-symbol (getf config-form :render-who-include-symbol)))))
+       routing-chain (getf config-form :routing-chain)
+       routers-path r-path
+       controllers-path c-path
+       views-path v-path
+       view-compilers-path vc-path
+       extensions (getf config-form :extensions)
+       verbose (getf config-form :verbose t)))))
 
-;; TODO init from new conf
-(defmethod initialize-instance :after ((state brac-appstate) &key config overwrite)
+;; TODO finish this
+(defmethod initialize-instance :after ((state brac-appstate) &key root-path)
+  (unless root-path
+    (error +init-appstate-with-rootpath+))
   (let (config-form config-path)
-    ;;make sure we have both config data and a file to keep it there.
-    ;;(multiple-value-setq (config-form config-path)
-      ;;(load-config-file-settings config overwrite))
-    ;;(fill-slots-with-config-file-settings config-form config-path state)
-    ;; TODO: maybe load views
-    ;;(load-builtin-routers state)
+    (multiple-value-setq (config-form config-path)
+      (load-config-file-settings root-path))
+    (fill-slots-with-config-file-settings config-form config-path root-path state)
+    (load-builtin-routers state)
     ;;(load-builtin-controllers state)
     ;;(load-router-files state)
     ;;(load-controller-files state)
+    ;; TODO: maybe load views
     ;;(load-view-files state)
     ))
 

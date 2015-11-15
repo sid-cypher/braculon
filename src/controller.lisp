@@ -44,25 +44,25 @@
 (defgeneric load-builtin-controllers (state)
   (:method ((state brac-appstate))
     (let ((messages-ctrl-callable
-	   (lambda (req)
+	   (lambda (env)
 	     nil))
 	  (hello-ctrl-callable
-	   (lambda (req)
+	   (lambda (env)
 	     "Outputs a short greetings page. A tiny built-in controller for testing purposes."
 	     (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 	       ;;TODO call renderer here
 	       (:html (:head (:title "braculon:hello"))
 		      (:body (:p "Hello! Things seem to work here."))))))
 	  (dir-index-ctrl-callable
-	   (lambda (req)
+	   (lambda (env)
 	     nil))
 	  (file-contents-ctrl-callable
-	   (lambda (req)
+	   (lambda (env)
 	     (lack.component:call
-	      (lack.app.file:make-app :file (getf (router-data req) :file)
+	      (lack.app.file:make-app :file (getf (router-data env) :file)
 				      :root (static-content-path state)))))
 	  (http-code-ctrl-callable
-	   (lambda (req)
+	   (lambda (env)
 	     nil)))
       (add-controller state (make-instance 'brac-ctrl
 					   :parent state
@@ -130,3 +130,6 @@
 						     :callable ctrl-callable
 						     :source-file filename)))))))))
   (:documentation ""))
+
+(defmethod call ((ctrl brac-ctrl) env)
+  (funcall (callable ctrl) env))
