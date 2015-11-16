@@ -27,6 +27,21 @@
     (format stream "~A" (name rtr))))
 
 (defgeneric chain-route-request (state env)
+  (:method ((state brac-appstate) env)
+    (flet ((call-router (form)
+	     (etypecase form
+	       (cons
+		(princ (gethash (first form) (routers state)))
+		(terpri)
+		(funcall (callable (gethash (first form) (routers state))) env (rest form)))
+	       (symbol (funcall (callable (gethash form (routers state))) env)))))
+      (format t "starting chainz~%")
+      (or
+       (find-if #'call-router (routing-chain state))
+       '(404
+	 (:content-type "text/html; charset=utf-8")
+	 ("<html><head><title>Not found</title></head>
+<body> Resource not found. </body></html>")))))
   (:documentation "o hai, i send off reqs thru routing tubez"))
 
 ;;TODO add hooks
@@ -49,15 +64,15 @@
 (defgeneric load-builtin-routers (state)
   (:method ((state brac-appstate))
     (let ((fixed-router-callable ;; TODO: with :regex t option
-	   (lambda (env)
+	   (lambda (env &keys)
 	     nil))
 	  (test-router-callable
-	   (lambda (env)
+	   (lambda (env &keys)
 	     `(200
 	       (:content-type "text/plain; charset=UTF-8")
 	       ,(list (format nil "state: ~A~%env: ~A~%" state env)))))
 	  (static-file-router-callable
-	   (lambda (env) ;; TODO: build-folder-index, recursive, separator, controller
+	   (lambda (env &keys) ;; TODO: build-folder-index, recursive, separator, controller
 
 
 	     ;; ===old===
@@ -87,10 +102,10 @@
 
 	     ))
 	  (code-router-callable
-	   (lambda (env)
+	   (lambda (env &keys)
 	     nil))
 	  (redirect-router-callable
-	   (lambda (env)
+	   (lambda (env &keys)
 	     nil)))
       (add-router state (make-instance 'brac-router
 				      :parent state
@@ -184,5 +199,5 @@
 						:source-file filename)))))))))
   (:documentation ""))
 
-(defmethod call ((rtr brac-router) env)
-  (funcall (callable brac-router) env))
+;;(defmethod call ((rtr brac-router) env &rest args &key &allow-other-keys)
+;;  (funcall (callable rtr) env :allow-other-keys t args))
