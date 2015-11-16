@@ -87,7 +87,8 @@
    (extensions :initform (make-hash-table :test 'eq)
 	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
    (launch-time :reader launch-time
-		:documentation ""))
+		:documentation "")
+   (clack-handler))
   (:documentation "This object represents a web app and holds its settings.
 You can pass an instance of this object to clack:clackup, as the necessary call method has already been defined for it."))
 
@@ -158,6 +159,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		  (format nil "~A" raw-name)))
        root-path given-root-path
        config-file config-path
+       ;;TODO: check that routing-chain isn't quoted
        routing-chain (getf config-form :routing-chain)
        routers-path r-path
        controllers-path c-path
@@ -188,11 +190,25 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   nil)
 
 ;; TODO optional config, wizard on *query-io*
-(defmethod start ((state brac-appstate) &key if-running)
-  nil)
+(defgeneric start (state &key if-running server port)
+  (:method ((state brac-appstate) &key if-running (server :woo) (port 5000))
+    (let ((clack-result (clack:clackup state :server server :port port
+					:use-default-middlewares nil)))
+      (when clack-result
+	(with-slots (clack-handler launch-time is-running-p) state
+	  (setf clack-handler clack-result)
+	  (setf launch-time (get-universal-time))
+	  (setf is-running-p t)
+	  clack-result)))))
 
-(defmethod stop ((state brac-appstate))
-  nil)
+(defgeneric stop (state)
+  (:method ((state brac-appstate))
+    (with-slots (clack-handler launch-time is-running-p) state
+	(when clack-handler
+	  (clack:stop clack-handler)
+	  (setf clack-handler nil)
+	  (setf is-running-p nil)
+	  t))))
 
 (defun show-running ()
   "Prints a list of running web projects."
