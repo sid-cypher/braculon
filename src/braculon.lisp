@@ -210,6 +210,9 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	  (setf is-running-p nil)
 	  t))))
 
+(defun load-app (path)
+  (make-instance 'brac-appstate :root-path path))
+
 (defun show-running ()
   "Prints a list of running web projects."
   (let ((namelist (mapcar #'name *project-instances*)))
