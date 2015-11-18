@@ -38,6 +38,7 @@
    "Please specify the path to your app dir with the :ROOT-PATH key." :test #'string=)
 
 (defvar *brac-apps* '() "launched web projects with separate configs")
+
 ;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
@@ -189,17 +190,40 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   "Answer the questions of the Wizard of Braculon and behold his wondrous magic."
   nil)
 
-;; TODO optional config, wizard on *query-io*
-(defgeneric start (state &key if-running server port)
-  (:method ((state brac-appstate) &key if-running (server :woo) (port 5000))
-    (let ((clack-result (clack:clackup state :server server :port port
-					:use-default-middlewares nil)))
-      (when clack-result
-	(with-slots (clack-handler launch-time is-running-p) state
-	  (setf clack-handler clack-result)
-	  (setf launch-time (get-universal-time))
-	  (setf is-running-p t)
-	  clack-result)))))
+(defgeneric start (appstate &key if-running server port)
+  (:method ((appstate brac-appstate) &key (if-running :restart) (server :woo) (port 5000))
+    (declare (type (member :error :skip :restart) if-running))
+    (flet ((actually-start
+	    ()
+	    (let ((clack-result (clack:clackup appstate :server server :port port
+					       :use-default-middlewares nil)))
+	      (when clack-result
+		(with-slots (clack-handler launch-time is-running-p) appstate
+		  (setf clack-handler clack-result)
+		  (setf launch-time (get-universal-time))
+		  (setf is-running-p t)
+		  (push appstate *brac-apps*)
+		  clack-result)))))
+	  (if (is-running-p appstate)
+	      (ecase if-running
+		(:skip nil)
+		(:restart (stop appstate)
+			  (actually-start))
+		(:error (error "The app you have tried to start is already running.")))
+	      (actually-start))))
+  (:documentation
+   "This function starts (or, if applicable, restarts) your application
+ as represented by an app object (returned by LOAD-APP). That includes
+ adding it to *BRAC-APPS* list, marking it as running and making it
+ begin accepting web requests.
+
+Use :SERVER key to pick a backend HTTP server from those supported by Clack.
+With :PORT key you can specify which port the server should listen to.
+Key :IF-RUNNING takes one of following values:
+- :RESTART to restart the app if it was already running (default),
+- :SKIP to do nothing if the app was already running,
+- :ERROR to signal an error if, you guessed it, the app was running.
+Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
 
 (defgeneric stop (state)
   (:method ((state brac-appstate))
@@ -208,6 +232,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	  (clack:stop clack-handler)
 	  (setf clack-handler nil)
 	  (setf is-running-p nil)
+	  (setf *brac-apps* (delete state *brac-apps*))
 	  t))))
 
 (defun load-app (path)
