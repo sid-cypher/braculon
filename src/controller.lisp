@@ -9,9 +9,11 @@
 	     :documentation "")
    (name :reader name
 	 :initarg :name
+	 :initform (error "Controller object needs a name symbol.")
 	 :documentation "")
    (callable :reader callable
 	     :initarg :callable
+	     :initform (error "Controller object needs it callable part.")
 	     :documentation "")
    (source-file :reader source-file
 		:initarg :source-file
@@ -24,13 +26,12 @@
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
-;; TODO hooks, maybe log
+;; TODO hooks, maybe log, no-overwrite option
 (defgeneric add-controller (state ctrl)
   (:method ((state brac-appstate) (ctrl brac-ctrl))
     "" ;; TODO
     (with-slots (controllers) state
-      (let ((ctrl-name (name ctrl)))
-	(setf (gethash ctrl-name controllers) ctrl))))
+      (setf (gethash (name ctrl) controllers) ctrl)))
   (:documentation ""))
 
 ;; TODO hooks
@@ -40,55 +41,75 @@
       (remhash ctrl-name controllers)))
   (:documentation ""))
 
+(defgeneric call-controller (state ctrl-name env)
+  (:method ((state brac-appstate) ctrl-name env)
+    (funcall (callable (gethash ctrl-name
+				(controllers state)))
+	     env))
+  (:documentation ""))
+
 ;; TODO check that callables receive correct arguments
 (defgeneric load-builtin-controllers (state)
   (:method ((state brac-appstate))
-    (let ((messages-ctrl-callable
+    (let ((test-ctrl-callable
 	   (lambda (env)
-	     nil))
+	     "Outputs a short greetings page. A tiny built-in controller for testing purposes."
+	     `(200
+	       (:content-type "text/plain; charset=UTF-8")
+	       ;;TODO call renderer here
+	       ,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%" state env)))))
 	  (hello-ctrl-callable
 	   (lambda (env)
 	     "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-	     (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
+	     (declare (ignorable env))
+	     `(200
+	       (:content-type "text/html; charset=utf-8")
 	       ;;TODO call renderer here
-	       (:html (:head (:title "braculon:hello"))
-		      (:body (:p "Hello! Things seem to work here."))))))
+	       ,(list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
+			(:html (:head (:title "braculon:hello"))
+			       (:body (:p "Hello! Things seem to work here."))))))))
 	  (dir-index-ctrl-callable
 	   (lambda (env)
 	     nil))
 	  (file-contents-ctrl-callable
 	   (lambda (env)
 	     (lack.component:call
-	      (lack.app.file:make-app :file (getf (router-data env) :file)
-				      :root (static-content-path state)))))
+	      (lack.app.file:make-app :file (getf (getf env :router-data) :file)
+				      :root (getf (extensions state) :static-content-path))
+	      env)))
 	  (http-code-ctrl-callable
 	   (lambda (env)
 	     nil)))
-      (add-controller state (make-instance 'brac-ctrl
-					   :parent state
-					   :name "messages"
-					   :callable messages-ctrl-callable
-					   :source-file nil))
-      (add-controller state (make-instance 'brac-ctrl
-					   :parent state
-					   :name "hello"
-					   :callable hello-ctrl-callable
-					   :source-file nil))
-      (add-controller state (make-instance 'brac-ctrl
-					   :parent state
-					   :name "dir-index"
-					   :callable dir-index-ctrl-callable
-					   :source-file nil))
-      (add-controller state (make-instance 'brac-ctrl
-					   :parent state
-					   :name "file-contents"
-					   :callable file-contents-ctrl-callable
-					   :source-file nil))
-      (add-controller state (make-instance 'brac-ctrl
-					   :parent state
-					   :name "http code"
-					   :callable http-code-ctrl-callable
-					   :source-file nil))
+      (add-controller
+       state (make-instance 'brac-ctrl
+			    :parent state
+			    :name 'brac-conf::test
+			    :callable test-ctrl-callable
+			    :source-file nil))
+      (add-controller
+       state (make-instance 'brac-ctrl
+			    :parent state
+			    :name 'brac-conf::hello
+			    :callable hello-ctrl-callable
+			    :source-file nil))
+      (add-controller
+       state (make-instance 'brac-ctrl
+			    :parent state
+			    :name 'brac-conf::dir-index
+			    :callable dir-index-ctrl-callable
+			    :source-file nil))
+      (add-controller
+       state (make-instance 'brac-ctrl
+			    :parent state
+			    :name 'brac-conf::file-contents
+			    :callable file-contents-ctrl-callable
+			    :source-file nil))
+      (add-controller
+       state (make-instance 'brac-ctrl
+			    :parent state
+			    :name 'brac-conf::http-code
+			    :callable http-code-ctrl-callable
+			    :source-file nil))
       t))
   (:documentation ""))
 

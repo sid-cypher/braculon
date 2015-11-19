@@ -59,8 +59,8 @@
    (config-file :reader config-file
 		:documentation "")
    (routers :reader routers
-	   :initform (make-hash-table :test 'eq)
-	   :documentation "")
+	    :initform (make-hash-table :test 'eq)
+	    :documentation "")
    (routing-chain :reader routing-chain
 		  :initform '()
 		  :documentation "")
@@ -74,7 +74,7 @@
 	  :initform (make-hash-table :test 'eq)
 	  :documentation "")
    (routers-path :reader routers-path
-		:documentation "")
+		 :documentation "")
    (controllers-path :reader controllers-path
 		     :documentation "")
    (views-path :reader views-path
@@ -85,7 +85,8 @@
 	    :reader verbosep
 	    :initform t
 	    :documentation "")
-   (extensions :initform (make-hash-table :test 'eq)
+   (extensions :reader extensions
+	       :initform (make-hash-table :test 'eq)
 	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
    (launch-time :reader launch-time
 		:documentation "")
@@ -178,7 +179,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
       (load-config-file-settings root-path))
     (fill-slots-with-config-file-settings config-form config-path root-path state)
     (load-builtin-routers state)
-    ;;(load-builtin-controllers state)
+    (load-builtin-controllers state)
     ;;(load-router-files state)
     ;;(load-controller-files state)
     ;; TODO: maybe load views

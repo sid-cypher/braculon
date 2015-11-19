@@ -35,14 +35,15 @@
 		(apply (callable (gethash (first form) (routers state)))
 		       env (rest form)))
 	       (symbol
-		(apply (callable (gethash form (routers state)))
-		       env)))))
+		(funcall (callable (gethash form (routers state)))
+			 env)))))
       (or
        (let (result)
-	 (dolist (form (routing-chain state) result)
+	 (dolist (form (routing-chain state))
+	   (format t "Calling form: ~W~%" form)
 	   (setf result (call-router form))
 	   (when result
-	     (return result)))) ;call controller by name in result
+	     (return (call-controller state result env)))))
        '(404 ;TODO: default error router with logging
 	 (:content-type "text/html; charset=utf-8")
 	 ("<html><head><title>Not found</title></head>
@@ -75,13 +76,11 @@
 	     (when (if trailing-slash-option
 		       (string-and-slash= path (getf env :path-info))
 		       (string= path (getf env :path-info)))
-	       (format t "And the return value is: ~W~%" ctrl-name)
 	       ctrl-name)))
 	  (test-router-callable
 	   (lambda (env &key)
-	     `(200
-	       (:content-type "text/plain; charset=UTF-8")
-	       ,(list (format nil "state: ~A~%env: ~A~%" state env)))))
+	     (format t "Test router reporting.~%state: ~W~%env: ~W~%" state env)
+	     'brac-conf::test))
 	  (static-file-router-callable
 	   (lambda (env &key) ;; TODO: build-folder-index, recursive, separator, controller
 
