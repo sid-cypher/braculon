@@ -32,17 +32,17 @@
     (flet ((call-router (form)
 	     (etypecase form
 	       (cons
-		(funcall (callable (gethash (first form) (routers state)))
-			 env (rest form) :allow-other-keys t))
+		(apply (callable (gethash (first form) (routers state)))
+		       env (rest form)))
 	       (symbol
-		(funcall (callable (gethash form (routers state)))
-			 env :allow-other-keys t)))))
+		(apply (callable (gethash form (routers state)))
+		       env)))))
       (or
        (let (result)
 	 (dolist (form (routing-chain state) result)
 	   (setf result (call-router form))
 	   (when result
-	     (return result))))
+	     (return result)))) ;call controller by name in result
        '(404 ;TODO: default error router with logging
 	 (:content-type "text/html; charset=utf-8")
 	 ("<html><head><title>Not found</title></head>
@@ -69,8 +69,14 @@
 (defgeneric load-builtin-routers (state)
   (:method ((state brac-appstate))
     (let ((fixed-router-callable ;; TODO: with :regex t option
-	   (lambda (env &key)
-	     nil))
+	   (lambda (env path ctrl-name &key (trailing-slash-option t))
+	     (declare (type string path)
+		      (type symbol ctrl-name))
+	     (when (if trailing-slash-option
+		       (string-and-slash= path (getf env :path-info))
+		       (string= path (getf env :path-info)))
+	       (format t "And the return value is: ~W~%" ctrl-name)
+	       ctrl-name)))
 	  (test-router-callable
 	   (lambda (env &key)
 	     `(200
@@ -81,29 +87,29 @@
 
 
 	     ;; ===old===
-	     (destructuring-bind (&key folder url-prefix data) options
-	       (unless (stringp url-prefix)
-		 ;; TODO: log config error - url-prefix not a string
-		 (setf url-prefix nil))
-	       (unless (pathnamep folder) ;; TODO as well
-		 (setf folder nil))
-	       (let ((static-files (uiop:directory-files
-				    (if folder
-					(merge-pathnames folder (static-content-path state))
-					(static-content-path state))))
-		     (prefix (or url-prefix "/"))
-		     matchp)
-		 (setf (router-data req) nil)
-		 (loop for file in static-files
-		    while (not matchp) do
-		    ;; trailing slash :deny \(later :allow, :require)
-		      (when (string= (url-req-path-name req)
-				     (cat prefix (file-namestring file)))
-			(setf (router-data req) (list :file file
-						     :data data))
-			(setf matchp t)))
-		 (when matchp
-		   "file-contents")))
+	     #+nil(destructuring-bind (&key folder url-prefix data) options
+		    (unless (stringp url-prefix)
+		      ;; TODO: log config error - url-prefix not a string
+		      (setf url-prefix nil))
+		    (unless (pathnamep folder) ;; TODO as well
+		      (setf folder nil))
+		    (let ((static-files (uiop:directory-files
+					 (if folder
+					     (merge-pathnames folder (static-content-path state))
+					     (static-content-path state))))
+			  (prefix (or url-prefix "/"))
+			  matchp)
+		      (setf (router-data req) nil)
+		      (loop for file in static-files
+			 while (not matchp) do
+			 ;; trailing slash :deny \(later :allow, :require)
+			   (when (string= (url-req-path-name req)
+					  (cat prefix (file-namestring file)))
+			     (setf (router-data req) (list :file file
+							   :data data))
+			     (setf matchp t)))
+		      (when matchp
+			"file-contents")))
 
 	     ))
 	  (code-router-callable
@@ -113,30 +119,30 @@
 	   (lambda (env &key)
 	     nil)))
       (add-router state (make-instance 'brac-router
-				      :parent state
-				      :name 'brac-conf::fixed
-				      :callable fixed-router-callable
-				      :source-file nil))
+				       :parent state
+				       :name 'brac-conf::fixed
+				       :callable fixed-router-callable
+				       :source-file nil))
       (add-router state (make-instance 'brac-router
-				      :parent state
-				      :name 'brac-conf::test
-				      :callable test-router-callable
-				      :source-file nil))
+				       :parent state
+				       :name 'brac-conf::test
+				       :callable test-router-callable
+				       :source-file nil))
       (add-router state (make-instance 'brac-router
-				      :parent state
-				      :name 'brac-conf::static
-				      :callable static-file-router-callable
-				      :source-file nil))
+				       :parent state
+				       :name 'brac-conf::static
+				       :callable static-file-router-callable
+				       :source-file nil))
       (add-router state (make-instance 'brac-router
-				      :parent state
-				      :name 'brac-conf::code
-				      :callable code-router-callable
-				      :source-file nil))
+				       :parent state
+				       :name 'brac-conf::code
+				       :callable code-router-callable
+				       :source-file nil))
       (add-router state (make-instance 'brac-router
-				      :parent state
-				      :name 'brac-conf::redirect
-				      :callable redirect-router-callable
-				      :source-file nil))
+				       :parent state
+				       :name 'brac-conf::redirect
+				       :callable redirect-router-callable
+				       :source-file nil))
       t))
   (:documentation ""))
 
@@ -198,10 +204,10 @@
 				 ,@rtr-body)))))
 	      (when rtr-callable ;; TODO log this addition
 		(add-router state (make-instance 'brac-router
-						:parent state
-						:name rtr-name
-						:callable rtr-callable
-						:source-file filename)))))))))
+						 :parent state
+						 :name rtr-name
+						 :callable rtr-callable
+						 :source-file filename)))))))))
   (:documentation ""))
 
 ;;(defmethod call ((rtr brac-router) env &rest args &key &allow-other-keys)

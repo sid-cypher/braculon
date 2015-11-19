@@ -31,6 +31,23 @@
 	 namesym)
 	(t nil)))
 
+(defun string-and-slash= (argpath matchpath)
+  "TODO"
+  (declare (type string argpath matchpath))
+  (let (aps mps (aplen (length argpath)) (mplen (length matchpath)))
+    (when (and (< 1 aplen)
+	       (string= "/" (subseq argpath (1- aplen) aplen)))
+      (setf aps t))
+    (when (and (< 1 mplen)
+	       (string= "/" (subseq matchpath (1- mplen) mplen)))
+      (setf mps t))
+    (string= (if aps
+		 (subseq argpath 0 (1- aplen))
+		 argpath)
+	     (if mps
+		 (subseq matchpath 0 (1- mplen))
+		 matchpath))))
+
 (defun date-from-timestamp (timestamp)
   (multiple-value-bind (s m h d mo y dw) (decode-universal-time timestamp)
     (declare (ignore s m h dw))
