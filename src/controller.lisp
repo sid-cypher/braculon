@@ -74,8 +74,11 @@
 	  (file-contents-ctrl-callable
 	   (lambda (env)
 	     (lack.component:call
-	      (lack.app.file:make-app :file (getf (getf env :router-data) :file)
-				      :root (getf (extensions state) :static-content-path))
+	      (let ((st-path-ext (getf (extensions state) :static-content-path)))
+		(lack.app.file:make-app :file (getf (getf env :router-data) :filename)
+					:root (or st-path-ext
+						  (uiop:merge-pathnames* #p"static/"
+									 (root-path state)))))
 	      env)))
 	  (http-code-ctrl-callable
 	   (lambda (env)

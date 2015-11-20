@@ -38,12 +38,13 @@
 		(funcall (callable (gethash form (routers state)))
 			 env)))))
       (or
-       (let (result)
-	 (dolist (form (routing-chain state))
+       (dolist (form (routing-chain state))
 	   (format t "Calling form: ~W~%" form)
-	   (setf result (call-router form))
-	   (when result
-	     (return (call-controller state result env)))))
+	   (multiple-value-bind (result new-env) (call-router form)
+	     (when new-env
+	       (setf env new-env))
+	     (when result
+	       (return (call-controller state result (or new-env env))))))
        '(404 ;TODO: default error router with logging
 	 (:content-type "text/html; charset=utf-8")
 	 ("<html><head><title>Not found</title></head>
@@ -83,6 +84,10 @@
 	     'brac-conf::test))
 	  (static-file-router-callable
 	   (lambda (env &key) ;; TODO: build-folder-index, recursive, separator, controller
+	     (let ((router-data '(:filename "wavy.png")))
+	       (setf (getf env :router-data) router-data)
+	       (when (string-and-slash= "/wavy" (getf env :path-info))
+		 (values 'brac-conf::file-contents env)))
 
 
 	     ;; ===old===
