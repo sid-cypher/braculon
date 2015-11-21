@@ -68,6 +68,16 @@
       (remhash rtr-name routers)))
   (:documentation ""))
 
+(defmacro defrouter* (name lambda-list appstate &body body)
+  (let ((callvar (gensym (symbol-name name))))
+    `(let ((,callvar (lambda ,lambda-list ,@body)))
+	 (add-router ,appstate
+		     (make-instance 'brac-router
+				    :parent ,appstate
+				    :name ',name
+				    :callable ,callvar
+				    :source-file nil)))))
+
 (defgeneric load-builtin-routers (state)
   (:method ((state brac-appstate))
     ;;TODO with regex option
@@ -144,13 +154,3 @@
 		    (*package* (find-package :brac-conf)))
 		(eval src-form))))))))
   (:documentation ""))
-
-(defmacro defrouter* (name lambda-list appstate &body body)
-  (let ((callvar (gensym (symbol-name name))))
-    `(let ((,callvar (lambda ,lambda-list ,@body)))
-	 (add-router ,appstate
-		     (make-instance 'brac-router
-				    :parent ,appstate
-				    :name ',name
-				    :callable ,callvar
-				    :source-file nil)))))

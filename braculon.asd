@@ -3,6 +3,8 @@
   :author "Evgeny Ilyushkin"
   :license "MIT"
   :depends-on (:alexandria
+	       :cl-syntax
+	       :cl-syntax-annot
 	       :cl-ppcre
 	       :cl-who
 	       :clack

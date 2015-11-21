@@ -21,15 +21,11 @@
      ;;TODO: scan for *std-out* redefs in body.
     ,@bod))
 
-(defun safe-name-symbol-to-string (namesym)
+(defun symbol-to-downcase-string (namesym)
   (declare (type (or string symbol) namesym))
-  (cond ((symbolp namesym)
-	 (when (or (keywordp namesym)
-		   (not (constantp namesym)))
-	   (string-downcase (symbol-name namesym))))
-	((stringp namesym)
-	 namesym)
-	(t nil)))
+  (etypecase namesym
+    (string namesym)
+    (symbol (string-downcase (symbol-name namesym)))))
 
 (defun string-and-slash= (argpath matchpath)
   "TODO"

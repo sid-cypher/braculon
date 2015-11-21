@@ -1,4 +1,5 @@
 (in-package :braculon)
+(cl-syntax:use-syntax :annot)
 
 ;; get current version from the system definition file
 (macrolet ((define-version-constants ()
@@ -37,15 +38,13 @@
 (define-constant +init-appstate-with-rootpath+
    "Please specify the path to your app dir with the :ROOT-PATH key." :test #'string=)
 
-(defvar *brac-apps* '() "launched web projects with separate configs")
+(defvar *loaded-apps* '() "List of web apps that have been already loaded.")
+(defvar *running-apps* '() "List of web apps that are running.")
 
 ;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
-(defclass brac-corestate ()
-  ())
-
-(defclass brac-appstate (brac-corestate)
+(defclass brac-appstate ()
   ((name :reader name
 	 :type 'string
 	 :initform "[unnamed]"
@@ -90,7 +89,7 @@
 	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
    (launch-time :reader launch-time
 		:documentation "")
-   (clack-handler))
+   (clack-handler :initform nil))
   (:documentation "This object represents a web app and holds its settings.
 You can pass an instance of this object to clack:clackup, as the necessary call method has already been defined for it."))
 
@@ -187,11 +186,26 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     ))
 
 ;; TODO summoning skeletons
+@export
 (defun wizard (path-to-app)
   "Answer the questions of the Wizard of Braculon and behold his wondrous magic."
   nil)
 
+@export
+(defun find-app (name)
+  (declare (type (or string symbol brac-appstate) name))
+  (if (typep name 'brac-appstate) name
+      (find name *loaded-apps*
+	:test (lambda (namearg an-app)
+		(string= (name an-app)
+			 (symbol-to-downcase-string namearg))))))
+
+@export
 (defgeneric start (appstate &key if-running server port)
+  (:method (app &key (if-running :restart) (server :woo) (port 5000))
+    (let ((state (find-app app)))
+      (when state
+	(start state :if-running if-running :server server :port port))))
   (:method ((appstate brac-appstate) &key (if-running :restart) (server :woo) (port 5000))
     (declare (type (member :error :skip :restart) if-running))
     (flet ((actually-start
@@ -203,7 +217,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		  (setf clack-handler clack-result)
 		  (setf launch-time (get-universal-time))
 		  (setf is-running-p t)
-		  (push appstate *brac-apps*)
+		  (push appstate *running-apps*)
 		  clack-result)))))
 	  (if (is-running-p appstate)
 	      (ecase if-running
@@ -215,7 +229,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   (:documentation
    "This function starts (or, if applicable, restarts) your application
  as represented by an app object (returned by LOAD-APP). That includes
- adding it to *BRAC-APPS* list, marking it as running and making it
+ adding it to *RUNNING-APPS* list, marking it as running and making it
  begin accepting web requests.
 
 Use :SERVER key to pick a backend HTTP server from those supported by Clack.
@@ -226,26 +240,63 @@ Key :IF-RUNNING takes one of following values:
 - :ERROR to signal an error if, you guessed it, the app was running.
 Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
 
-(defgeneric stop (state)
+@export
+(defgeneric stop (appstate)
+  (:method (name)
+    (let ((state (find-app name)))
+      (when state
+	(stop state))))
   (:method ((state brac-appstate))
-    (with-slots (clack-handler launch-time is-running-p) state
+    (with-slots (clack-handler launch-time is-running-p name) state
 	(when clack-handler
 	  (clack:stop clack-handler)
 	  (setf clack-handler nil)
 	  (setf is-running-p nil)
-	  (setf *brac-apps* (delete state *brac-apps*))
+	  (setf *running-apps* (delete-if (lambda (an-app)
+					    (string= name (name an-app)))
+					  *running-apps*))
 	  t))))
 
-(defun load-app (path)
-  (make-instance 'brac-appstate :root-path path))
+@export
+(defun unload-app (app)
+  (stop app)
+  (let ((appname (if (typep app 'brac-appstate)
+		     (name app)
+		     (symbol-to-downcase-string app))))
+    (setf *loaded-apps*
+	(delete-if (lambda (an-app)
+		     (string= (name an-app) appname))
+		   *loaded-apps*))))
 
+@export
+(defun load-app (path)
+  (let ((app (find path *loaded-apps*
+		   :test (lambda (pn an-app)
+			   (uiop:pathname-equal pn (root-path an-app))))))
+    (when app
+      (unload-app app)))
+  (let ((new-app (make-instance 'brac-appstate :root-path path)))
+    (push new-app *loaded-apps*)
+    new-app))
+
+@export
+(defun reload-app (state)
+  (let ((was-running (is-running-p state)))
+    (unload-app state)
+    (let ((new-state (load-app (root-path state))))
+      (when was-running
+	(start new-state))
+      new-state)))
+
+@export
 (defun show-running ()
   "Prints a list of running web projects."
-  (let ((namelist (mapcar #'name *project-instances*)))
+  (let ((namelist (mapcar #'name *running-apps*)))
     (format t "~{~A~%~}" namelist)
     ;; TODO: uptime
     namelist))
 
+@export
 (defmethod state-report ((state brac-appstate))
   ;;TODO
   nil)

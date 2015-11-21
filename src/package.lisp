@@ -2,9 +2,6 @@
   (:nicknames :brac)
   (:use :cl :alexandria :cl-who)
   (:export
-   #:start
-   #:stop
-   #:wizard
    #:brac-appstate
    #:brac-router
    #:brac-controller
