@@ -119,8 +119,8 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (error +root-path-doesnt-exist+ root-path))
   (let (config-form config-path)
     (setf config-path (uiop:merge-pathnames* #p"settings.conf.lisp" root-path))
-    (setf config-form (read-form-file config-path))
-    ;; TODO better read-form-file error handling
+    (setf config-form (read-first-form-file config-path))
+    ;; TODO better read-first-form-file error handling
     (unless config-form
       (error "~A~%" +form-read-error+))
     (unless (string= (symbol-name (first config-form))
@@ -180,7 +180,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (fill-slots-with-config-file-settings config-form config-path root-path state)
     (load-builtin-routers state)
     (load-builtin-controllers state)
-    ;;(load-router-files state)
+    (load-router-files state)
     ;;(load-controller-files state)
     ;; TODO: maybe load views
     ;;(load-view-files state)
