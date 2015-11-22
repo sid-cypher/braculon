@@ -4,7 +4,7 @@
   (:export
    #:brac-appstate
    #:brac-router
-   #:brac-controller
+   #:brac-ctrl
    #:*appstate*
    #:root-path ;;TODO: auto-export class accessor symbols
    #:extensions

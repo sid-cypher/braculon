@@ -69,14 +69,14 @@
   (:documentation ""))
 
 (defmacro defrouter* (name lambda-list appstate &body body)
-  (let ((callvar (gensym (symbol-name name))))
-    `(let ((,callvar (lambda ,lambda-list ,@body)))
-	 (add-router ,appstate
-		     (make-instance 'brac-router
-				    :parent ,appstate
-				    :name ',name
-				    :callable ,callvar
-				    :source-file nil)))))
+  (declare (type symbol name)
+	   (type list lambda-list))
+  `(add-router ,appstate
+	       (make-instance 'brac-router
+			      :parent ,appstate
+			      :name ',name
+			      :callable (lambda ,lambda-list ,@body)
+			      :source-file nil)))
 
 (defgeneric load-builtin-routers (state)
   (:method ((state brac-appstate))
@@ -147,7 +147,7 @@
 			     (second src-form)))) ;; TODO report errors
 	    (when (and (string= (symbol-name fcall-symbol) "DEFROUTER")
 		       (symbolp rtr-name))
-	      (format t "Router definition found: ~A~%Internal name: ~W~%"
+	      (format t "Router definition found: ~A; Internal name: ~W~%"
 		      filepath rtr-name)
 	      (let ((brac:*appstate* state)
 		    (brac::*router-src-file* filepath)

@@ -227,10 +227,11 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		(:error (error "The app you have tried to start is already running.")))
 	      (actually-start))))
   (:documentation
-   "This function starts (or, if applicable, restarts) your application
- as represented by an app object (returned by LOAD-APP). That includes
- adding it to *RUNNING-APPS* list, marking it as running and making it
- begin accepting web requests.
+   "This function starts (or, if applicable, restarts) your application.
+ It accepts an app object (returned by LOAD-APP) or its name (string or symbol)
+ as an argument. Providing a name results in calling FIND-APP internally.
+ Starting an app includes adding it to *RUNNING-APPS* list, marking it as running
+ and making it begin accepting web requests.
 
 Use :SERVER key to pick a backend HTTP server from those supported by Clack.
 With :PORT key you can specify which port the server should listen to.

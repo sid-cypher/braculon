@@ -48,6 +48,15 @@
 	     env))
   (:documentation ""))
 
+(defmacro defcontroller* (name env-var appstate &body body)
+  (declare (type symbol name env-var))
+  `(add-controller ,appstate
+		   (make-instance 'brac-ctrl
+				  :parent ,appstate
+				  :name ',name
+				  :callable (lambda (,env-var) ,@body)
+				  :source-file nil)))
+
 ;; TODO check that callables receive correct arguments
 (defgeneric load-builtin-controllers (state)
   (:method ((state brac-appstate))
@@ -116,43 +125,30 @@
       t))
   (:documentation ""))
 
+;;TODO: remove special variables in favor of ENV keys
+(defvar *controller-src-file* nil)
+
 ;; TODO check file format
 (defgeneric load-controller-files (state)
   (:method ((state brac-appstate))
     (let ((controller-src-files (uiop:directory-files (controllers-path state))))
-      (dolist (filename controller-src-files)
-	(let ((source-file-forms (read-multiple-forms-file filename)))
-	  (dolist (src-form source-file-forms)
-	    (let* ((fcall-symbol (when (consp src-form)
-				   (pop src-form)))
-		   (ctrl-name (when (consp src-form)
-				(pop src-form)))
-		   (ctrl-lambda-list (when (consp src-form)
-				       (pop src-form)))
-		   (req-sym (when (consp ctrl-lambda-list)
-			      (pop ctrl-lambda-list)))
-		   (ctrl-body (when (consp src-form)
-				src-form))
-		   ctrl-callable) ;; TODO report errors
-	      (when (and (symbolp fcall-symbol)
-			 (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
-			 (or (stringp ctrl-name)
-			     (symbolp ctrl-name))
-			 (symbolp req-sym)
-			 (null ctrl-lambda-list)
-			 (not (constantp req-sym))
-			 ctrl-body)
-		(setf ctrl-name (safe-name-symbol-to-string ctrl-name))
-		(setf ctrl-callable
-		      (ignore-errors ;; TODO log the errors instead
-			(eval `(lambda (,req-sym)
-				 ,@ctrl-body)))))
-	      (when ctrl-callable
-		(add-controller state (make-instance 'brac-ctrl
-						     :parent state
-						     :name ctrl-name
-						     :callable ctrl-callable
-						     :source-file filename)))))))))
+      (dolist (filepath controller-src-files)
+	(let ((src-form (read-single-form-file filepath)))
+	  (let* ((fcall-symbol (when (and (consp src-form)
+					  (symbolp (first src-form)))
+				 (first src-form)))
+		 (ctrl-name (when (consp (rest src-form))
+			      (second src-form)))) ;; TODO report errors
+
+	    (when (and (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
+		       (symbolp ctrl-name))
+	      (format t "Controller definition found: ~A; Internal name: ~W~%"
+		      filepath ctrl-name)
+
+	      (let ((brac:*appstate* state)
+		    (brac::*controller-src-file* filepath)
+		    (*package* (find-package :brac-conf)))
+		(eval src-form))))))))
   (:documentation ""))
 
 ;;(defmethod call ((ctrl brac-ctrl) env &rest args &key &allow-other-keys)
