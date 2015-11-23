@@ -37,6 +37,7 @@
 		 (subseq matchpath 0 (1- mplen))
 		 matchpath))))
 
+;;TODO: use local-time
 (defmacro with-decoded-timestamp
     (timestamp (&key sec min h day mon year dweek dst-p tz) &body body)
   (let ((time-unit-symbols
@@ -50,6 +51,7 @@
        (declare (ignorable ,@time-unit-symbols))
        ,@body)))
 
+;;TODO: use local-time
 (defun date-from-timestamp (timestamp)
   (with-decoded-timestamp timestamp ()
     (format nil "~A ~A, ~A" (aref local-time:+month-names+ mon) (count-en-num day) year)))
@@ -61,6 +63,7 @@
 		0
 		(mod n 10))))
 
+;;TODO: use local-time
 (defun uptime-seconds-to-dhms (univ-time-before-now)
   (let ((seconds (- (get-universal-time) univ-time-before-now))
 	minutes hours days)

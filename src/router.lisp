@@ -20,7 +20,7 @@
 		:initarg :source-file
 		:documentation "")
    (load-time :reader load-time
-	      :initform (get-universal-time)
+	      :initform (local-time:now)
 	      :documentation "")))
 
 (defmethod print-object ((rtr brac-router) stream)
@@ -135,6 +135,7 @@
 ;;TODO: remove special variables in favor of ENV keys
 (defvar *router-src-file* nil)
 
+;;TODO: DRY in load-some-files
 (defgeneric load-router-files (state)
   (:method ((state brac-appstate))
     (let ((router-src-files (uiop:directory-files (routers-path state))))
@@ -147,7 +148,7 @@
 			     (second src-form)))) ;; TODO report errors
 	    (when (and (string= (symbol-name fcall-symbol) "DEFROUTER")
 		       (symbolp rtr-name))
-	      (format t "Router definition found: ~A; Internal name: ~W~%"
+	      (format t "Router definition file found: ~A; name: ~W~%"
 		      filepath rtr-name)
 	      (let ((brac:*appstate* state)
 		    (brac::*router-src-file* filepath)

@@ -183,9 +183,8 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (load-builtin-routers state)
     (load-builtin-controllers state)
     (load-router-files state)
-    ;;(load-controller-files state)
-    ;; TODO: maybe load views
-    ;;(load-view-files state)
+    (load-controller-files state)
+    (load-view-files state)
     ))
 
 ;; TODO summoning skeletons
@@ -203,6 +202,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		(string= (name an-app)
 			 (symbol-to-downcase-string namearg))))))
 
+;;TODO: use local-time
 @export
 (defgeneric start (appstate &key if-running server port)
   (:method (app &key (if-running :restart) (server :woo) (port 5000))

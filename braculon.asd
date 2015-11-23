@@ -19,7 +19,9 @@
 	         (:file "braculon" :depends-on ("util"))
 	         (:file "router" :depends-on ("braculon"))
 	         (:file "controller" :depends-on ("braculon"))
-		 (:file "conf-macros" :depends-on ("router" "controller"))
-	         (:file "view" :depends-on ("braculon")))))
+	         (:file "view" :depends-on ("braculon"))
+	         (:file "view-compiler" :depends-on ("braculon"))
+		 (:file "conf-macros"
+			:depends-on ("router" "controller" "view" "view-compiler")))))
   :description "Modular and customizable Clack-based web framework"
   :long-description "")

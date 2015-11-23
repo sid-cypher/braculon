@@ -20,7 +20,7 @@
 		:initarg :source-file
 		:documentation "")
    (load-time :reader load-time
-	      :initform (get-universal-time)
+	      :initform (local-time:now)
 	      :documentation "")))
 
 (defmethod print-object ((ctrl brac-ctrl) stream)
@@ -61,69 +61,33 @@
 ;; TODO check that callables receive correct arguments
 (defgeneric load-builtin-controllers (state)
   (:method ((state brac-appstate))
-    (let ((test-ctrl-callable
-	   (lambda (env)
-	     "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-	     `(200
-	       (:content-type "text/plain; charset=UTF-8")
-	       ;;TODO call renderer here
-	       ,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%" state env)))))
-	  (hello-ctrl-callable
-	   (lambda (env)
-	     "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-	     (declare (ignorable env))
-	     `(200
-	       (:content-type "text/html; charset=utf-8")
-	       ;;TODO call renderer here
-	       ,(list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
-			(:html (:head (:title "braculon:hello"))
-			       (:body (:p "Hello! Things seem to work here."))))))))
-	  (dir-index-ctrl-callable
-	   (lambda (env)
-	     nil))
-	  (file-contents-ctrl-callable
-	   (lambda (env)
-	     (lack.component:call
-	      (let ((st-path-ext (getf (extensions state) :static-content-path)))
-		(lack.app.file:make-app :file (getf (getf env :router-data) :filename)
-					:root (or st-path-ext
-						  (uiop:merge-pathnames* #p"static/" ;;TODO no magic
-									 (root-path state)))))
-	      env)))
-	  (http-code-ctrl-callable
-	   (lambda (env)
-	     nil)))
-      (add-controller
-       state (make-instance 'brac-ctrl
-			    :parent state
-			    :name 'brac-conf::test
-			    :callable test-ctrl-callable
-			    :source-file nil))
-      (add-controller
-       state (make-instance 'brac-ctrl
-			    :parent state
-			    :name 'brac-conf::hello
-			    :callable hello-ctrl-callable
-			    :source-file nil))
-      (add-controller
-       state (make-instance 'brac-ctrl
-			    :parent state
-			    :name 'brac-conf::dir-index
-			    :callable dir-index-ctrl-callable
-			    :source-file nil))
-      (add-controller
-       state (make-instance 'brac-ctrl
-			    :parent state
-			    :name 'brac-conf::file-contents
-			    :callable file-contents-ctrl-callable
-			    :source-file nil))
-      (add-controller
-       state (make-instance 'brac-ctrl
-			    :parent state
-			    :name 'brac-conf::http-code
-			    :callable http-code-ctrl-callable
-			    :source-file nil))
-      t))
+    (defcontroller* brac-conf::test env state
+      "Outputs a short greetings page. A tiny built-in controller for testing purposes."
+      `(200
+	(:content-type "text/plain; charset=UTF-8")
+	;;TODO call renderer here
+	,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%" state env))))
+
+    (defcontroller* brac-conf::hello env state
+      "Outputs a short greetings page. A tiny built-in controller for testing purposes."
+      (declare (ignorable env))
+      `(200
+	(:content-type "text/html; charset=utf-8")
+	;;TODO call renderer here
+	,(list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
+		 (:html (:head (:title "braculon:hello"))
+			(:body (:p "Hello! Things seem to work here.")))))))
+
+    (defcontroller* brac-conf::file-contents env state
+      (lack.component:call
+       (let ((st-path-ext (getf (extensions state) :static-content-path)))
+	 (lack.app.file:make-app
+	  :file (getf (getf env :router-data) :filename)
+	  :root (or st-path-ext
+		    (uiop:merge-pathnames* #p"static/" ;;TODO no magic
+					   (root-path state)))))
+       env))
+    t)
   (:documentation ""))
 
 ;;TODO: remove special variables in favor of ENV keys
@@ -143,7 +107,7 @@
 
 	    (when (and (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
 		       (symbolp ctrl-name))
-	      (format t "Controller definition found: ~A; Internal name: ~W~%"
+	      (format t "Controller definition file found: ~A; name: ~W~%"
 		      filepath ctrl-name)
 
 	      (let ((brac:*appstate* state)
@@ -151,6 +115,3 @@
 		    (*package* (find-package :brac-conf)))
 		(eval src-form))))))))
   (:documentation ""))
-
-;;(defmethod call ((ctrl brac-ctrl) env &rest args &key &allow-other-keys)
-  ;;(funcall (callable ctrl) env :allow-other-keys t args))
