@@ -1,5 +1,6 @@
 (in-package :braculon)
-(cl-syntax:use-syntax :annot)
+(use-package :annot.class)
+(annot:enable-annot-syntax)
 
 ;; get current version from the system definition file
 (macrolet ((define-version-constants ()
@@ -40,10 +41,12 @@
 
 (defvar *loaded-apps* '() "List of web apps that have been already loaded.")
 (defvar *running-apps* '() "List of web apps that are running.")
+(defvar *appstate* nil "Used in macros when loading files") ;;TODO: get rid of it.
 
 ;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
 
+@export-class
 (defclass brac-appstate ()
   ((name :reader name
 	 :type 'string
@@ -208,24 +211,24 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	(start state :if-running if-running :server server :port port))))
   (:method ((appstate brac-appstate) &key (if-running :restart) (server :woo) (port 5000))
     (declare (type (member :error :skip :restart) if-running))
-    (flet ((actually-start
-	    ()
-	    (let ((clack-result (clack:clackup appstate :server server :port port
-					       :use-default-middlewares nil)))
-	      (when clack-result
-		(with-slots (clack-handler launch-time is-running-p) appstate
-		  (setf clack-handler clack-result)
-		  (setf launch-time (get-universal-time))
-		  (setf is-running-p t)
-		  (push appstate *running-apps*)
-		  clack-result)))))
-	  (if (is-running-p appstate)
-	      (ecase if-running
-		(:skip nil)
-		(:restart (stop appstate)
-			  (actually-start))
-		(:error (error "The app you have tried to start is already running.")))
-	      (actually-start))))
+    (flet ((actually-start ()
+	     (let ((clack-result (clack:clackup appstate :server server :port port
+						:use-default-middlewares nil)))
+	       (when clack-result
+		 (with-slots (clack-handler launch-time is-running-p) appstate
+		   (setf clack-handler clack-result)
+		   (setf launch-time (get-universal-time))
+		   (setf is-running-p t)
+		   (push appstate *running-apps*)
+		   clack-result)))))
+      (if (is-running-p appstate)
+	  (ecase if-running
+	    (:skip nil)
+	    (:restart (stop appstate)
+		      (actually-start))
+	    ;;TODO: define errmsg string constant elsewhere
+	    (:error (error "The app you have tried to start is already running.")))
+	  (actually-start))))
   (:documentation
    "This function starts (or, if applicable, restarts) your application.
  It accepts an app object (returned by LOAD-APP) or its name (string or symbol)
@@ -281,21 +284,43 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
     new-app))
 
 @export
-(defun reload-app (state)
-  (let ((was-running (is-running-p state)))
+(defun reload-app (app)
+  (let* ((state (find-app app))
+	 (was-running (is-running-p state)))
     (unload-app state)
     (let ((new-state (load-app (root-path state))))
       (when was-running
 	(start new-state))
       new-state)))
 
+(defmacro list-those-apps (applist)
+  `(if (not print)
+       (mapcar #'name ,applist)
+       (loop for app in ,applist
+	  with name
+	  do (progn
+	       (setf name (name app))
+	       (if (and detailed
+			(is-running-p app))
+		   (multiple-value-bind (d m h s)
+		       (uptime-seconds-to-dhms (launch-time app))
+		     (format t (mcat "~A (uptime: ~[~*~:;~D days, ~]"
+				     "~[~*~:;~D hours, ~]"
+				     "~[~*~:;~D minutes, ~]"
+				     "~D seconds.)~%") name d d m m h h s))
+		   (format t "~A~%" name)))
+	  collect name into names
+	  return names)))
+
 @export
-(defun show-running ()
-  "Prints a list of running web projects."
-  (let ((namelist (mapcar #'name *running-apps*)))
-    (format t "~{~A~%~}" namelist)
-    ;; TODO: uptime
-    namelist))
+(defun list-loaded-apps (&key (print t) (detailed t))
+  "Returns and optionally prints a list of running web projects."
+  (list-those-apps *loaded-apps*))
+
+@export
+(defun list-running-apps (&key (print t) (detailed t))
+  "Returns and optionally prints a list of running web projects."
+  (list-those-apps *running-apps*))
 
 @export
 (defmethod state-report ((state brac-appstate))

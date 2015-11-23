@@ -1,7 +1,8 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Base: 10 -*-
-
 (in-package :braculon)
+(use-package :annot.class)
+(annot:enable-annot-syntax)
 
+@export-class
 (defclass brac-ctrl ()
   ((appstate :reader appstate
 	     :initarg :parent

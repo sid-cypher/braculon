@@ -1,7 +1,8 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Base: 10 -*-
-
 (in-package :braculon)
+(use-package :annot.class)
+(annot:enable-annot-syntax)
 
+@export-class
 (defclass brac-router ()
   ((appstate :reader appstate
 	     :initarg :parent
@@ -132,7 +133,6 @@
   (:documentation ""))
 
 ;;TODO: remove special variables in favor of ENV keys
-(defvar *appstate* nil)
 (defvar *router-src-file* nil)
 
 (defgeneric load-router-files (state)

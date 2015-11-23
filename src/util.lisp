@@ -1,11 +1,4 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Base: 10 -*-
-
 (in-package :braculon)
-
-(define-constant +month-names+
-    '("January" "February" "March" "April" "May" "June"
-      "July" "August" "September" "October" "November" "December")
-  :test #'equal)
 
 (defmacro cat (&body bod)
   "because \(concatenate 'string ...) is too much to type"
@@ -44,10 +37,22 @@
 		 (subseq matchpath 0 (1- mplen))
 		 matchpath))))
 
+(defmacro with-decoded-timestamp
+    (timestamp (&key sec min h day mon year dweek dst-p tz) &body body)
+  (let ((time-unit-symbols
+	 (list
+	  (or sec 'sec) (or min 'min)
+	  (or h 'h) (or day 'day)
+	  (or mon 'mon) (or year 'year)
+	  (or dweek 'dweek) (or dst-p 'dst-p)
+	  (or tz 'tz))))
+    `(multiple-value-bind ,time-unit-symbols (decode-universal-time ,timestamp)
+       (declare (ignorable ,@time-unit-symbols))
+       ,@body)))
+
 (defun date-from-timestamp (timestamp)
-  (multiple-value-bind (s m h d mo y dw) (decode-universal-time timestamp)
-    (declare (ignore s m h dw))
-    (format nil "~A ~A, ~A" (nth (1- mo) +month-names+) d y)))
+  (with-decoded-timestamp timestamp ()
+    (format nil "~A ~A, ~A" (aref local-time:+month-names+ mon) (count-en-num day) year)))
 
 (defun count-en-num (n)
   (declare (type fixnum n))
@@ -55,6 +60,20 @@
 	  n (if (= 1 (mod (floor n 10) 10)) ;; second digit, teens
 		0
 		(mod n 10))))
+
+(defun uptime-seconds-to-dhms (univ-time-before-now)
+  (let ((seconds (- (get-universal-time) univ-time-before-now))
+	minutes hours days)
+    (multiple-value-bind (d s) (truncate seconds local-time:+seconds-per-day+)
+      (setf days d
+	    seconds s))
+    (multiple-value-bind (h s) (truncate seconds local-time:+seconds-per-hour+)
+      (setf hours h
+	    seconds s))
+    (multiple-value-bind (m s) (truncate seconds local-time:+seconds-per-minute+)
+      (setf minutes m
+	    seconds s))
+    (values days hours minutes seconds)))
 
 (defun filesize (path)
   (with-open-file (f path)

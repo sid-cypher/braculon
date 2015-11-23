@@ -5,6 +5,7 @@
   :depends-on (:alexandria
 	       :cl-syntax
 	       :cl-syntax-annot
+	       :local-time
 	       :cl-ppcre
 	       :cl-who
 	       :clack
@@ -16,9 +17,9 @@
                  (:static-file "LICENSE")
 	         (:file "util" :depends-on ("package"))
 	         (:file "braculon" :depends-on ("util"))
-		 (:file "conf-macros" :depends-on ("braculon"))
 	         (:file "router" :depends-on ("braculon"))
 	         (:file "controller" :depends-on ("braculon"))
+		 (:file "conf-macros" :depends-on ("router" "controller"))
 	         (:file "view" :depends-on ("braculon")))))
   :description "Modular and customizable Clack-based web framework"
   :long-description "")

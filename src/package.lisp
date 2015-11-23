@@ -1,14 +1,12 @@
 (defpackage :braculon
   (:nicknames :brac)
-  (:use :cl :alexandria :cl-who)
+  (:use :cl
+	:annot
+	:annot.class
+	:alexandria
+	:cl-who)
   (:export
-   #:brac-appstate
-   #:brac-router
-   #:brac-ctrl
-   #:*appstate*
-   #:root-path ;;TODO: auto-export class accessor symbols
-   #:extensions
-   #:defrouter))
+   #:*appstate*))
 
 (defpackage :brac-conf
   (:use :cl :braculon)
