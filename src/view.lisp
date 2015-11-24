@@ -14,12 +14,10 @@
 	 :documentation "")
    (fields :reader fields
 	   :initarg :fields
-	   :initform '()
-	   :documentation "A list of field name keywords.")
+	   :documentation "A vector of field name keywords.")
    (dependencies :reader dependencies
 		 :initarg :dependencies
-		 :initform '()
-		 :documentation "A list of direct dependencies of this view, name strings.")
+		 :documentation "A vector of direct dependencies of this view, name symbols.")
    (renderable :reader renderable
 	       :initarg :renderable
 	       :initform (error "View object needs it renderable part.")
@@ -49,6 +47,26 @@
     (with-slots (views) state
       (remhash view-name views)))
   (:documentation ""))
+
+;;TODO
+(defun make-field-collection (view-name &key no-deps)
+  nil)
+
+;;TODO
+(defun field (collection indicator)
+  nil)
+
+;;TODO
+(defun (setf field) (collection indicator value)
+  nil)
+
+;;TODO
+(defun render (env)
+  nil)
+
+;;TODO
+(defun load-builtin-views (state)
+  nil)
 
 ;;TODO: remove special variables in favor of ENV keys
 (defvar *view-src-file* nil)

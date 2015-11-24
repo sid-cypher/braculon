@@ -27,6 +27,20 @@
   (print-unreadable-object (rtr stream :type t)
     (format stream "~A" (name rtr))))
 
+;;TODO
+(defun process-response (env)
+  nil)
+
+;;TODO
+(defun pack-routing-data (env)
+  nil)
+
+;;TODO
+(defun get-appstate (env)
+  nil)
+
+;;TODO: rewrite so that only env is send to and received from a controller.
+;; return the result of a PROCESS-RESPONSE function called with env.
 (defgeneric chain-route-request (state env)
   (:method ((state brac-appstate) env)
     ;; TODO *all* the sanity checks

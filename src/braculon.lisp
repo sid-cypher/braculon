@@ -314,7 +314,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
 
 @export
 (defun list-loaded-apps (&key (print t) (detailed t))
-  "Returns and optionally prints a list of running web projects."
+  "Returns and optionally prints a list of loaded web projects."
   (list-those-apps *loaded-apps*))
 
 @export

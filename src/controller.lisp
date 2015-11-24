@@ -42,6 +42,11 @@
       (remhash ctrl-name controllers)))
   (:documentation ""))
 
+;;TODO
+(defun pack-rendering-data (env)
+  nil)
+
+;;TODO: rewrite so that only env is returned.
 (defgeneric call-controller (state ctrl-name env)
   (:method ((state brac-appstate) ctrl-name env)
     (funcall (callable (gethash ctrl-name
@@ -58,7 +63,7 @@
 				  :callable (lambda (,env-var) ,@body)
 				  :source-file nil)))
 
-;; TODO check that callables receive correct arguments
+;; TODO return new env only.
 (defgeneric load-builtin-controllers (state)
   (:method ((state brac-appstate))
     (defcontroller* brac-conf::test env state
