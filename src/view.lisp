@@ -14,9 +14,13 @@
 	 :documentation "")
    (fields :reader fields
 	   :initarg :fields
+	   :type list
+	   :initform ()
 	   :documentation "A vector of field name keywords.")
    (dependencies :reader dependencies
 		 :initarg :dependencies
+		 :type list
+		 :initform ()
 		 :documentation "A vector of direct dependencies of this view, name symbols.")
    (renderable :reader renderable
 	       :initarg :renderable
@@ -37,28 +41,53 @@
 (defgeneric add-view (state view)
   (:method ((state brac-appstate) (view brac-view))
     "" ;; TODO
-    nil)
+    (with-slots (views) state
+      (setf (gethash (name view) views) view)))
   (:documentation ""))
 
 ;; TODO hooks
 (defgeneric del-view (state view-name)
   (:method ((state brac-appstate) view-name)
-    (declare (type string view-name))
+    (declare (type symbol view-name))
     (with-slots (views) state
       (remhash view-name views)))
   (:documentation ""))
 
-;;TODO
-(defun make-field-collection (view-name &key no-deps)
-  nil)
+(defgeneric get-view (state view-name)
+  (:method ((state brac-appstate) view-name)
+    (declare (type symbol view-name))
+    (gethash view-name (slot-value state 'views)))
+  (:method (env view-name)
+    (etypecase env
+      (cons (get-view (get-appstate env) view-name))))
+  (:documentation ""))
 
-;;TODO
+(defun hash-table-test-eq-p (ht)
+  (eq 'eq (hash-table-test ht)))
+
+;;TODO use defstruct for better printing
+(deftype view-field-collection ()
+  '(and hash-table
+    (satisfies hash-table-test-eq-p)))
+
+;;TODO walk view dependencies, get full length, add keys
+(defun make-field-collection (view &key no-deps)
+  (make-hash-table :test 'eq
+		   :size (length (fields view))
+		   :rehash-threshold 1))
+
 (defun field (collection indicator)
-  nil)
+  ""
+  (declare (type view-field-collection collection)
+	   (type keyword indicator))
+  (gethash indicator collection))
 
-;;TODO
 (defun (setf field) (collection indicator value)
-  nil)
+  (declare (type view-field-collection collection)
+	   (type keyword indicator))
+  (setf (gethash indicator collection) value))
+
+(defmacro with-view-fields (env))
 
 ;;TODO
 (defun render (env)

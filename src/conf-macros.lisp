@@ -43,7 +43,7 @@
 		     (make-instance 'brac:brac-view
 				    :parent brac:*appstate*
 				    :name ',name
-				    :fields (coerce ',field-list 'simple-vector)
-				    :dependencies (coerce ',dep-list 'simple-vector)
+				    :fields ',field-list
+				    :dependencies ',dep-list
 				    :renderable ,callvar
 				    :source-file brac::*view-src-file*))))))

@@ -323,7 +323,8 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
   (list-those-apps *running-apps*))
 
 @export
-(defmethod state-report ((state brac-appstate))
-  ;;TODO
-  nil)
+(defgeneric state-report (state)
+  (:method ((state brac-appstate))
+    ;;TODO
+    nil))
 

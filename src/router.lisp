@@ -35,15 +35,18 @@
 (defun pack-routing-data (env)
   nil)
 
-;;TODO
 (defun get-appstate (env)
-  nil)
+  (let ((appstate (getf env :appstate)))
+    (if (typep appstate 'brac-appstate)
+	appstate
+	(error "Appstate object not found."))))
 
 ;;TODO: rewrite so that only env is send to and received from a controller.
 ;; return the result of a PROCESS-RESPONSE function called with env.
 (defgeneric chain-route-request (state env)
   (:method ((state brac-appstate) env)
     ;; TODO *all* the sanity checks
+    (setf env (cons :appstate (cons state env))) ;quick-push appstate to env
     (flet ((call-router (form)
 	     (etypecase form
 	       (cons
