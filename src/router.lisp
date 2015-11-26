@@ -28,10 +28,6 @@
     (format stream "~A" (name rtr))))
 
 ;;TODO
-(defun process-response (env)
-  nil)
-
-;;TODO
 (defun pack-routing-data (env)
   nil)
 
@@ -46,6 +42,7 @@
 (defgeneric chain-route-request (state env)
   (:method ((state brac-appstate) env)
     ;; TODO *all* the sanity checks
+    (setf env (cons :rendered-response (cons nil env)))
     (setf env (cons :appstate (cons state env))) ;quick-push appstate to env
     (flet ((call-router (form)
 	     (etypecase form
@@ -55,18 +52,23 @@
 	       (symbol
 		(funcall (callable (gethash form (routers state)))
 			 env)))))
-      (or
-       (dolist (form (routing-chain state))
-	 (format t "Calling form: ~W~%" form)
-	 (multiple-value-bind (result new-env) (call-router form)
-	   (when new-env
-	     (setf env new-env))
-	   (when result
-	     (return (call-controller state result (or new-env env))))))
-       '(404 ;TODO: default error router with logging
-	 (:content-type "text/html; charset=utf-8")
-	 ("<html><head><title>Not found</title></head>
-<body> Resource not found. </body></html>")))))
+      (the cons
+	   (or
+	    (dolist (form (routing-chain state))
+	      (format t "Calling form: ~W~%" form)
+	      (multiple-value-bind (result new-env) (call-router form)
+		(when new-env
+		  (setf env new-env))
+		(when result
+		  (return (call-controller state result (or new-env env))))))
+	    (progn
+	      (setf
+	       (getf env :rendered-response)
+	       '(404 ;TODO: default error router with logging
+		 (:content-type "text/html; charset=utf-8")
+		 ("<html><head><title>Not found</title></head>
+<body> Resource not found. </body></html>")))
+	      env)))))
   (:documentation "o hai, i send off reqs thru routing tubez"))
 
 ;;TODO add hooks

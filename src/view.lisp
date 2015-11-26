@@ -93,6 +93,25 @@
 (defun render (env)
   nil)
 
+;;TODO optional typechecks, faster typechecking, better env data structure
+(defun get-rendered-response (env)
+  (let ((response (getf env :rendered-response)))
+    (if (or (typep response 'function)
+	    (and
+	     (consp response)
+	     (integerp (first response))
+	     (listp (second response))
+	     (typep (third response) '(or cons pathname (simple-array (unsigned-byte 8))))
+	     (if (consp (third response))
+		 (stringp (first (third response)))
+		 t)))
+	response
+	(error "No proper HTTP response cons-tree or function was found."))))
+
+(defun set-rendered-response (value env)
+  (setf (getf env :rendered-response) value)
+  env)
+
 ;;TODO
 (defun load-builtin-views (state)
   nil)

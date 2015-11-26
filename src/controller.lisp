@@ -68,30 +68,33 @@
   (:method ((state brac-appstate))
     (defcontroller* brac-conf::test env state
       "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-      `(200
+      (set-rendered-response
+       `(200
 	(:content-type "text/plain; charset=UTF-8")
 	;;TODO call renderer here
-	,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%" state env))))
+	,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%" state env))) env))
 
     (defcontroller* brac-conf::hello env state
       "Outputs a short greetings page. A tiny built-in controller for testing purposes."
       (declare (ignorable env))
-      `(200
+      (set-rendered-response
+       `(200
 	(:content-type "text/html; charset=utf-8")
 	;;TODO call renderer here
 	,(list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 		 (:html (:head (:title "braculon:hello"))
-			(:body (:p "Hello! Things seem to work here.")))))))
+			(:body (:p "Hello! Things seem to work here.")))))) env))
 
     (defcontroller* brac-conf::file-contents env state
-      (lack.component:call
+      (set-rendered-response
+       (lack.component:call
        (let ((st-path-ext (getf (extensions state) :static-content-path)))
 	 (lack.app.file:make-app
 	  :file (getf (getf env :router-data) :filename)
 	  :root (or st-path-ext
 		    (uiop:merge-pathnames* #p"static/" ;;TODO no magic
 					   (root-path state)))))
-       env))
+       env) env))
     t)
   (:documentation ""))
 
