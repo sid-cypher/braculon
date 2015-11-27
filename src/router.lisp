@@ -27,49 +27,50 @@
   (print-unreadable-object (rtr stream :type t)
     (format stream "~A" (name rtr))))
 
-;;TODO
-(defun pack-routing-data (env)
-  nil)
+(defun pack-routing-data (env source-router target-controller data)
+  (declare (type brac-reqstate env)
+	   (type brac-router source-router)
+	   (type brac-ctrl target-controller))
+  (setf (router env) source-router)
+  (setf (controller env) target-controller)
+  (setf (routing-data env) data)
+  env)
 
-(defun get-appstate (env)
-  (let ((appstate (getf env :appstate)))
-    (if (typep appstate 'brac-appstate)
-	appstate
-	(error "Appstate object not found."))))
+(defgeneric get-router (state rtr-name)
+  (:method ((state brac-appstate) rtr-name)
+    ""
+    (declare (type string rtr-name))
+    (with-slots (routers) state
+      (gethash rtr-name routers)))
+  (:documentation ""))
 
 ;;TODO: rewrite so that only env is send to and received from a controller.
-;; return the result of a PROCESS-RESPONSE function called with env.
-(defgeneric chain-route-request (state env)
-  (:method ((state brac-appstate) env)
-    ;; TODO *all* the sanity checks
-    (setf env (cons :rendered-response (cons nil env)))
-    (setf env (cons :appstate (cons state env))) ;quick-push appstate to env
-    (flet ((call-router (form)
-	     (etypecase form
-	       (cons
-		(apply (callable (gethash (first form) (routers state)))
-		       env (rest form)))
-	       (symbol
-		(funcall (callable (gethash form (routers state)))
-			 env)))))
-      (the cons
-	   (or
-	    (dolist (form (routing-chain state))
-	      (format t "Calling form: ~W~%" form)
-	      (multiple-value-bind (result new-env) (call-router form)
-		(when new-env
-		  (setf env new-env))
-		(when result
-		  (return (call-controller state result (or new-env env))))))
-	    (progn
-	      (setf
-	       (getf env :rendered-response)
-	       '(404 ;TODO: default error router with logging
-		 (:content-type "text/html; charset=utf-8")
-		 ("<html><head><title>Not found</title></head>
+(defun chain-route-request (env)
+  ;; TODO *all* the sanity checks
+  (flet ((call-router (form)
+	   (etypecase form
+	     (cons
+	      (apply (callable (gethash (first form) (routers (appstate env))))
+		     env (rest form)))
+	     (symbol
+	      (funcall (callable (gethash form (routers (appstate env))))
+		       env)))))
+    (the cons
+	 (or
+	  (dolist (form (routing-chain (appstate env)))
+	    (format t "Calling form: ~W~%" form)
+	    (multiple-value-bind (result new-env) (call-router form)
+	      (when new-env
+		(setf env new-env))
+	      (when result
+		(return (call-controller (appstate env) result (or new-env env))))))
+	  (progn
+	    (setf (response env)
+		  '(404 ;TODO: default error router with logging
+		    (:content-type "text/html; charset=utf-8")
+		    ("<html><head><title>Not found</title></head>
 <body> Resource not found. </body></html>")))
-	      env)))))
-  (:documentation "o hai, i send off reqs thru routing tubez"))
+	    env)))))
 
 ;;TODO add hooks
 (defgeneric add-router (state rtr)
@@ -107,7 +108,11 @@
       (when (if trailing-slash-option
 		(string-and-slash= path (getf env :path-info))
 		(string= path (getf env :path-info)))
-	ctrl-name))
+	(pack-routing-data
+	 env
+	 (get-router state 'brac-conf::fixed)
+	 (get-controller state ctrl-name)
+	 nil)))
 
     (defrouter* brac-conf::test (env) state
       (format t "Test router reporting.~%state: ~W~%env: ~W~%" state env)
@@ -169,7 +174,7 @@
 		       (symbolp rtr-name))
 	      (format t "Router definition file found: ~A; name: ~W~%"
 		      filepath rtr-name)
-	      (let ((brac:*appstate* state)
+	      (let ((brac::*appstate* state)
 		    (brac::*router-src-file* filepath)
 		    (*package* (find-package :brac-conf)))
 		(eval src-form))))))))

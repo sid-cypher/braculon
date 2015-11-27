@@ -136,7 +136,7 @@
 	      (format t "View definition file found: ~A; name: ~W~%"
 		      filepath view-name)
 
-	      (let ((brac:*appstate* state)
+	      (let ((brac::*appstate* state)
 		    (brac::*view-src-file* filepath)
 		    (*package* (find-package :brac-conf)))
 		(eval src-form))))))))

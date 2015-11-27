@@ -41,7 +41,7 @@
 
 (defvar *loaded-apps* '() "List of web apps that have been already loaded.")
 (defvar *running-apps* '() "List of web apps that are running.")
-(defvar *appstate* nil "Used in macros when loading files") ;;TODO: get rid of it.
+(defvar *appstate* nil "Used in macros when loading files")
 
 ;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
@@ -103,6 +103,12 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	    (if (is-running-p state) "running"
 		"stopped"))))
 
+(defun wrap-request (env appstate)
+  (make-instance 'brac-reqstate
+		 :appstate appstate
+		 :original-request env
+		 :request (hash-original-request env)))
+
 (defun process-response (env)
   (get-rendered-response env))
 
@@ -112,7 +118,8 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (format t +connecting-clack+ (name state)))
   (lambda (env)
     (process-response
-     (chain-route-request state env))))
+     (chain-route-request
+      (wrap-request env)))))
 
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)
@@ -167,8 +174,14 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		  (format nil "~A" raw-name)))
        root-path given-root-path
        config-file config-path
-       ;;TODO: check that routing-chain isn't quoted
-       routing-chain (getf config-form :routing-chain)
+       routing-chain (let ((rc (getf config-form :routing-chain)))
+		       (if (consp rc)
+			   (if (and (symbolp (car rc))
+				    (string= "QUOTE"
+					     (symbol-name (car rc))))
+			       (cadr rc)
+			       rc)
+			   (error "Routing chain not a list or empty.")))
        routers-path r-path
        controllers-path c-path
        views-path v-path
@@ -332,3 +345,6 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
     ;;TODO
     nil))
 
+;; TODO: when creating a new app skeleton, make sure there's a src/ folder
+;; where all kinds of random code can be put, whether it's extentions/redefinitions
+;; or something that doesn't fit in the framework, stuff like that.

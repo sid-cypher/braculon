@@ -141,6 +141,3 @@ of specified pathname-type only (compared with STRING=)."
 			   :fill-pointer t)))
       (setf (fill-pointer str) (read-sequence str f :end (when (> (file-length f) max-len) max-len)))
       str)))
-
-;;TODO: search for DEFUNs and DEFMACROs in a functions folder and eval them
-;;  in a package \(maybe with the same name as the project)

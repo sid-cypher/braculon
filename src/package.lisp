@@ -4,9 +4,7 @@
 	:annot
 	:annot.class
 	:alexandria
-	:cl-who)
-  (:export
-   #:*appstate*))
+	:cl-who))
 
 (defpackage :brac-conf
   (:use :cl :braculon)

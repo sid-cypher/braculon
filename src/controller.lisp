@@ -27,6 +27,12 @@
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
+(defgeneric get-controller (state ctrl-name)
+  (:method ((state brac-appstate) ctrl-name)
+    (with-slots (controllers) state
+      (gethash ctrl-name controllers)))
+  (:documentation ""))
+
 ;; TODO hooks, maybe log, no-overwrite option
 (defgeneric add-controller (state ctrl)
   (:method ((state brac-appstate) (ctrl brac-ctrl))
@@ -118,7 +124,7 @@
 	      (format t "Controller definition file found: ~A; name: ~W~%"
 		      filepath ctrl-name)
 
-	      (let ((brac:*appstate* state)
+	      (let ((brac::*appstate* state)
 		    (brac::*controller-src-file* filepath)
 		    (*package* (find-package :brac-conf)))
 		(eval src-form))))))))
