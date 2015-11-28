@@ -30,6 +30,7 @@
 @export
 (defgeneric get-controller (state ctrl-name)
   (:method ((state brac-appstate) ctrl-name)
+    (declare (type symbol ctrl-name))
     (with-slots (controllers) state
       (gethash ctrl-name controllers)))
   (:documentation ""))
@@ -48,10 +49,6 @@
     (with-slots (controllers) state
       (remhash ctrl-name controllers)))
   (:documentation ""))
-
-;;TODO
-(defun pack-rendering-data (env)
-  nil)
 
 ;;TODO: rewrite so that only env is returned.
 (defgeneric call-controller (env)

@@ -57,41 +57,67 @@
   (:method ((state brac-appstate) view-name)
     (declare (type symbol view-name))
     (gethash view-name (slot-value state 'views)))
-  (:method (env view-name)
-    (etypecase env
-      (cons (get-view (get-appstate env) view-name))))
+  (:method ((env brac-reqstate) view-name)
+    (get-view (appstate env) view-name))
   (:documentation ""))
 
-(defun hash-table-test-eq-p (ht)
-  (eq 'eq (hash-table-test ht)))
-
-;;TODO use defstruct for better printing
-(deftype view-field-collection ()
-  '(and hash-table
-    (satisfies hash-table-test-eq-p)))
-
 ;;TODO walk view dependencies, get full length, add keys
-(defun make-field-collection (view &key no-deps)
-  (make-hash-table :test 'eq
-		   :size (length (fields view))
-		   :rehash-threshold 1))
+;;IMPORTANT: check if view was already visited, avoid circular deps.
+(defun make-field-collection (view)
+  (let ((state (appstate view))
+	(queue (make-instance 'jpl-queues:unbounded-fifo-queue))
+	dep-fields-list
+	all-dep-fields
+	field-collection)
+    (labels
+	((bfs-walk (v) ;;make iterative maybe
+	   (declare (type brac-view view))
+	   (dolist (dv (dependencies v))
+	     (jpl-queues:enqueue (get-view state dv) queue))
+	   (push (fields v) dep-fields-list)
+	   (let ((next (jpl-queues:dequeue queue)))
+	     (if next
+		 (bfs-walk next)
+		 t))))
+      (bfs-walk view))
+    (format t "Dependecies of ~W need fields:~%~W~%" view dep-fields-list)
+    (setf all-dep-fields (reduce #'nunion dep-fields-list))
+    (format t "Union: ~W~%" all-dep-fields)
+    (setf field-collection
+	  (make-hash-table :test 'eq
+			   :size (length all-dep-fields)
+			   :rehash-threshold 1))
+    (dolist (field-key all-dep-fields)
+      (setf (gethash field-key field-collection) nil))
+    field-collection))
 
 (defun field (collection indicator)
   ""
-  (declare (type view-field-collection collection)
+  (declare (type hash-table collection)
 	   (type keyword indicator))
   (gethash indicator collection))
 
 (defun (setf field) (collection indicator value)
-  (declare (type view-field-collection collection)
+  (declare (type hash-table collection)
 	   (type keyword indicator))
   (setf (gethash indicator collection) value))
 
-(defmacro with-view-fields (env))
+;;TODO later
+(defmacro with-view-fields (env)
+  )
+
+@export
+(defgeneric pack-rendering-data (env view &optional field-collection)
+  (:method ((env brac-reqstate) (view brac-view) &optional field-collection)
+    (setf (root-view env) view)
+    (setf (view-fields env)
+	  (or field-collection
+	      (make-field-collection view))))
+  (:documentation ""))
 
 ;;TODO
 (defun render (env)
-  nil)
+  )
 
 ;;TODO faster typechecking, better env data structure
 (defun valid-response-p (clack-response-form)

@@ -141,3 +141,5 @@ of specified pathname-type only (compared with STRING=)."
 			   :fill-pointer t)))
       (setf (fill-pointer str) (read-sequence str f :end (when (> (file-length f) max-len) max-len)))
       str)))
+
+;;TODO: a lightweight cons-based queue (save tail element), breadth-first traversal.

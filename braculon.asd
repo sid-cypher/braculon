@@ -3,6 +3,7 @@
   :author "Evgeny Ilyushkin"
   :license "MIT"
   :depends-on (:alexandria
+	       :jpl-queues
 	       :cl-syntax
 	       :cl-syntax-annot
 	       :local-time
