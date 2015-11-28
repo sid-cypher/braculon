@@ -93,23 +93,23 @@
 (defun render (env)
   nil)
 
-;;TODO optional typechecks, faster typechecking, better env data structure
-(defun get-rendered-response (env)
-  (let ((response (getf env :rendered-response)))
-    (if (or (typep response 'function)
+;;TODO faster typechecking, better env data structure
+(defun valid-response-p (clack-response-form)
+  (if (or (typep clack-response-form 'function)
 	    (and
-	     (consp response)
-	     (integerp (first response))
-	     (listp (second response))
-	     (typep (third response) '(or cons pathname (simple-array (unsigned-byte 8))))
-	     (if (consp (third response))
-		 (stringp (first (third response)))
+	     (consp clack-response-form)
+	     (integerp (first clack-response-form))
+	     (listp (second clack-response-form))
+	     (typep (third clack-response-form)
+		    '(or cons pathname (simple-array (unsigned-byte 8))))
+	     (if (consp (third clack-response-form))
+		 (stringp (first (third clack-response-form)))
 		 t)))
-	response
-	(error "No proper HTTP response cons-tree or function was found."))))
+	clack-response-form
+	nil))
 
-(defun set-rendered-response (value env)
-  (setf (getf env :rendered-response) value)
+(defun set-response (value env)
+  (setf (response env) value)
   env)
 
 ;;TODO

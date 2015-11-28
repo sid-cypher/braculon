@@ -103,23 +103,27 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 	    (if (is-running-p state) "running"
 		"stopped"))))
 
-(defun wrap-request (env appstate)
+(defun wrap-request (clack-env appstate)
   (make-instance 'brac-reqstate
 		 :appstate appstate
-		 :original-request env
-		 :request (hash-original-request env)))
+		 :original-request clack-env
+		 :request (hash-original-request clack-env)))
 
-(defun process-response (env)
-  (get-rendered-response env))
+(defgeneric process-request (env)
+  (:method ((env brac-reqstate))
+    (chain-route-request env)
+    (call-controller env)
+    (render env)
+    (response env))
+  (:documentation ""))
 
 (defmethod lack.component:to-app ((state brac-appstate))
   "This method is called by Clack to get a callback function that will be used for each incoming HTTP request to your app."
   (when (verbosep state)
     (format t +connecting-clack+ (name state)))
-  (lambda (env)
-    (process-response
-     (chain-route-request
-      (wrap-request env)))))
+  (lambda (clack-env)
+    (process-request
+     (wrap-request clack-env state))))
 
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)

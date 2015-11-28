@@ -27,6 +27,7 @@
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
+@export
 (defgeneric get-controller (state ctrl-name)
   (:method ((state brac-appstate) ctrl-name)
     (with-slots (controllers) state
@@ -53,11 +54,12 @@
   nil)
 
 ;;TODO: rewrite so that only env is returned.
-(defgeneric call-controller (state ctrl-name env)
-  (:method ((state brac-appstate) ctrl-name env)
-    (funcall (callable (gethash ctrl-name
-				(controllers state)))
-	     env))
+(defgeneric call-controller (env)
+  (:method ((env brac-reqstate))
+    (let ((ctrl (controller env)))
+      (when ctrl
+	(funcall (callable ctrl)
+		 env))))
   (:documentation ""))
 
 (defmacro defcontroller* (name env-var appstate &body body)
@@ -74,16 +76,17 @@
   (:method ((state brac-appstate))
     (defcontroller* brac-conf::test env state
       "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-      (set-rendered-response
+      (set-response
        `(200
 	(:content-type "text/plain; charset=UTF-8")
 	;;TODO call renderer here
-	,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%" state env))) env))
+	,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%~A~%"
+		       state env (format-request env)))) env))
 
     (defcontroller* brac-conf::hello env state
       "Outputs a short greetings page. A tiny built-in controller for testing purposes."
       (declare (ignorable env))
-      (set-rendered-response
+      (set-response
        `(200
 	(:content-type "text/html; charset=utf-8")
 	;;TODO call renderer here
@@ -92,11 +95,11 @@
 			(:body (:p "Hello! Things seem to work here.")))))) env))
 
     (defcontroller* brac-conf::file-contents env state
-      (set-rendered-response
+      (set-response
        (lack.component:call
        (let ((st-path-ext (getf (extensions state) :static-content-path)))
 	 (lack.app.file:make-app
-	  :file (getf (getf env :router-data) :filename)
+	  :file (getf (routing-data env) :filename)
 	  :root (or st-path-ext
 		    (uiop:merge-pathnames* #p"static/" ;;TODO no magic
 					   (root-path state)))))

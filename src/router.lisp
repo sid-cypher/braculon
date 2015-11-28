@@ -27,6 +27,7 @@
   (print-unreadable-object (rtr stream :type t)
     (format stream "~A" (name rtr))))
 
+@export
 (defun pack-routing-data (env source-router target-controller data)
   (declare (type brac-reqstate env)
 	   (type brac-router source-router)
@@ -36,48 +37,45 @@
   (setf (routing-data env) data)
   env)
 
+@export
 (defgeneric get-router (state rtr-name)
   (:method ((state brac-appstate) rtr-name)
     ""
-    (declare (type string rtr-name))
-    (with-slots (routers) state
-      (gethash rtr-name routers)))
+    (declare (type symbol rtr-name))
+    (gethash rtr-name (slot-value state 'routers)))
   (:documentation ""))
 
 ;;TODO: rewrite so that only env is send to and received from a controller.
 (defun chain-route-request (env)
   ;; TODO *all* the sanity checks
-  (flet ((call-router (form)
-	   (etypecase form
-	     (cons
-	      (apply (callable (gethash (first form) (routers (appstate env))))
-		     env (rest form)))
-	     (symbol
-	      (funcall (callable (gethash form (routers (appstate env))))
-		       env)))))
-    (the cons
-	 (or
-	  (dolist (form (routing-chain (appstate env)))
-	    (format t "Calling form: ~W~%" form)
-	    (multiple-value-bind (result new-env) (call-router form)
-	      (when new-env
-		(setf env new-env))
-	      (when result
-		(return (call-controller (appstate env) result (or new-env env))))))
-	  (progn
-	    (setf (response env)
-		  '(404 ;TODO: default error router with logging
-		    (:content-type "text/html; charset=utf-8")
-		    ("<html><head><title>Not found</title></head>
-<body> Resource not found. </body></html>")))
-	    env)))))
+  (let ((state (appstate env)))
+    (flet ((call-router (form)
+	     (etypecase form
+	       (cons
+		(apply (callable (gethash (first form) (routers state)))
+		       env (rest form)))
+	       (symbol
+		(funcall (callable (gethash form (routers state)))
+			 env)))))
 
-;;TODO add hooks
+      (dolist (form (routing-chain state))
+	(format t "Calling form: ~W~%" form)
+	(let ((new-env (call-router form)))
+	  (when new-env
+	    (setf env new-env)
+	    (return))))
+      (setf (response env) ;default response to be overwritten
+	    '(404 ;TODO: default error router with logging
+	      (:content-type "text/html; charset=utf-8")
+	      ("<html><head><title>Not found</title></head>
+<body> Resource not found. </body></html>")))
+      env)))
+
+;;TODO add hooks into router slot writer
 (defgeneric add-router (state rtr)
   (:method ((state brac-appstate) (rtr brac-router))
     ""
-    (with-slots (routers) state
-      (setf (gethash (name rtr) routers) rtr)))
+    (setf (gethash (name rtr) (slot-value state 'routers)) rtr))
   (:documentation ""))
 
 ;;TODO add hooks
@@ -106,24 +104,30 @@
       (declare (type string path)
 	       (type symbol ctrl-name))
       (when (if trailing-slash-option
-		(string-and-slash= path (getf env :path-info))
-		(string= path (getf env :path-info)))
-	(pack-routing-data
-	 env
-	 (get-router state 'brac-conf::fixed)
-	 (get-controller state ctrl-name)
-	 nil)))
+		(string-and-slash= path (gethash :path-info (request env)))
+		(string= path (gethash :path-info (request env))))
+	(pack-routing-data env
+			   (get-router state 'brac-conf::fixed)
+			   (get-controller state ctrl-name)
+			   nil)))
 
     (defrouter* brac-conf::test (env) state
-      (format t "Test router reporting.~%state: ~W~%env: ~W~%" state env)
-      'brac-conf::test)
+      (format t "Test router reporting.~%state: ~W~%env: ~W~%"
+	      state env)
+      (pack-routing-data env
+			 (get-router state 'brac-conf::test)
+			 (get-controller state 'brac-conf::test)
+			 nil))
 
     ;; TODO: build-folder-index, recursive, separator, controller
     (defrouter* brac-conf::static (env) state
       (let ((router-data '(:filename "wavy.png")))
-	(setf (getf env :router-data) router-data)
-	(when (string-and-slash= "/wavy" (getf env :path-info))
-	  (values 'brac-conf::file-contents env))))
+	(setf (routing-data env) router-data)
+	(when (string-and-slash= "/wavy" (gethash :path-info (request env)))
+	  (pack-routing-data env
+			     (get-router state 'brac-conf::static)
+			     (get-controller state 'brac-conf::file-contents)
+			     router-data))))
     ;; ===old===
     #+nil(destructuring-bind (&key folder url-prefix data) options
 	   (unless (stringp url-prefix)
@@ -149,9 +153,9 @@
 	     (when matchp
 	       "file-contents")))
 
-    (defrouter* brac-conf::code (env) state
+    #+nil(defrouter* brac-conf::redirect (env) state
       nil)
-    (defrouter* brac-conf::redirect (env) state
+    #+nil(defrouter* brac-conf::masquerade (env) state
       nil)
     t)
   (:documentation ""))
