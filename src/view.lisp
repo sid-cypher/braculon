@@ -80,9 +80,9 @@
 		 (bfs-walk next)
 		 t))))
       (bfs-walk view))
-    (format t "Dependecies of ~W need fields:~%~W~%" view dep-fields-list)
+    (format t "Dependencies of ~W need fields:~%~W~%" view dep-fields-list)
     (setf all-dep-fields (reduce #'nunion dep-fields-list))
-    (format t "Union: ~W~%" all-dep-fields)
+    (format t "Union list: ~W~%" all-dep-fields)
     (setf field-collection
 	  (make-hash-table :test 'eq
 			   :size (length all-dep-fields)
@@ -91,6 +91,7 @@
       (setf (gethash field-key field-collection) nil))
     field-collection))
 
+@export
 (defun field (collection indicator)
   ""
   (declare (type hash-table collection)
@@ -102,9 +103,17 @@
 	   (type keyword indicator))
   (setf (gethash indicator collection) value))
 
-;;TODO later
-(defmacro with-view-fields (env)
-  )
+(defmacro with-view-fields (fields env &body body)
+  ""
+  (let ((fcol-sym (gensym "field-collection"))
+	field-bindings)
+    (loop for f in fields do
+      (push `(,f (field ,fcol-sym
+			(find-symbol (symbol-name ,f) :keyword)))
+	    field-bindings))
+    `(let ((,fcol-sym (view-fields ,env)))
+       (let ,field-bindings
+	 ,@body))))
 
 @export
 (defgeneric pack-rendering-data (env view &optional field-collection)
@@ -115,9 +124,24 @@
 	      (make-field-collection view))))
   (:documentation ""))
 
-;;TODO
+@export
 (defun render (env)
-  )
+  ""
+  (let ((view (root-view env)))
+    (when view
+      (let ((state (appstate env))
+	    result)
+	(labels
+	    ((dep-call-results (v)
+	       (let ((deps (dependencies v))
+		     (ren-fun (renderable v)))
+		 (loop for d in deps
+		       with results
+		       do (push (dep-call-results (get-view state d))
+				results)
+		       return (apply ren-fun env results)))))
+	  (setf result (dep-call-results view)))
+	(setf (response-content env) result)))))
 
 ;;TODO faster typechecking, better env data structure
 (defun valid-response-p (clack-response-form)
@@ -134,9 +158,14 @@
 	clack-response-form
 	nil))
 
-(defun set-response (value env)
-  (setf (response env) value)
-  env)
+(defun to-clack-response (env)
+  (list
+   (status-code env)
+   (alexandria:hash-table-plist (response-headers env))
+   (let ((content (response-content env)))
+     (if (stringp content)
+	 (list content)
+	 content))))
 
 ;;TODO
 (defun load-builtin-views (state)

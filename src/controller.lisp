@@ -73,34 +73,35 @@
   (:method ((state brac-appstate))
     (defcontroller* brac-conf::test env state
       "Outputs a short greetings page. A tiny built-in controller for testing purposes."
-      (set-response
-       `(200
-	(:content-type "text/plain; charset=UTF-8")
-	;;TODO call renderer here
-	,(list (format nil "Test controller reporting.~%state: ~W~%env: ~W~%~A~%"
-		       state env (format-request env)))) env))
+      (setf (status-code env) 200)
+      (setf (gethash :content-type (response-headers env)) "text/plain; charset=UTF-8")
+      (setf (response-content env)
+	    (format nil "Test controller reporting.~%state: ~W~%env: ~W~%~A~%"
+		    state env (format-request env)))
+      env)
 
     (defcontroller* brac-conf::hello env state
       "Outputs a short greetings page. A tiny built-in controller for testing purposes."
       (declare (ignorable env))
-      (set-response
-       `(200
-	(:content-type "text/html; charset=utf-8")
-	;;TODO call renderer here
-	,(list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
-		 (:html (:head (:title "braculon:hello"))
-			(:body (:p "Hello! Things seem to work here.")))))) env))
+      (setf (status-code env) 200)
+      (setf (gethash :content-type (response-headers env)) "text/html; charset=UTF-8")
+      (setf (response-content env)
+	    (list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
+		    (:html (:head (:title "braculon:hello"))
+			   (:body (:p "Hello! Things seem to work here."))))))
+      env)
 
     (defcontroller* brac-conf::file-contents env state
-      (set-response
-       (lack.component:call
-       (let ((st-path-ext (getf (extensions state) :static-content-path)))
-	 (lack.app.file:make-app
-	  :file (getf (routing-data env) :filename)
-	  :root (or st-path-ext
-		    (uiop:merge-pathnames* #p"static/" ;;TODO no magic
-					   (root-path state)))))
-       env) env))
+      (setf (response-content env)
+	    (lack.component:call
+	     (let ((st-path-ext (getf (extensions state) :static-content-path)))
+	       (lack.app.file:make-app
+		:file (getf (routing-data env) :filename)
+		:root (or st-path-ext
+			  (uiop:merge-pathnames* #p"static/" ;;TODO no magic
+						 (root-path state)))))
+	     (original-request env)))
+      env)
     t)
   (:documentation ""))
 

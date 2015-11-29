@@ -64,6 +64,8 @@
 	  (when new-env
 	    (setf env new-env)
 	    (return))))
+      ;;TODO: render default response if all fails.
+      #+nil
       (setf (response env) ;default response to be overwritten
 	    '(404 ;TODO: default error router with logging
 	      (:content-type "text/html; charset=utf-8")

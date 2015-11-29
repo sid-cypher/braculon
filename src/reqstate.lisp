@@ -21,8 +21,15 @@
 		     :initarg :original-request)
    (request :accessor request
 	    :initarg :request)
-   (response :accessor response
-	     :initarg :response)))
+   (response-status-code :accessor status-code
+			 :initarg :status-code
+			 :initform 200
+			 :type fixnum)
+   (response-headers :accessor response-headers
+		     :initform (make-hash-table :test 'eq)
+		     :type hash-table)
+   (response-content :accessor response-content
+		     :initarg :response)))
 
 (defmethod print-object ((req brac-reqstate) stream)
   (print-unreadable-object (req stream :type t)

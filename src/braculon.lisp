@@ -114,7 +114,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (chain-route-request env)
     (call-controller env)
     (render env)
-    (response env))
+    (to-clack-response env))
   (:documentation ""))
 
 (defmethod lack.component:to-app ((state brac-appstate))
@@ -206,6 +206,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (load-router-files state)
     (load-controller-files state)
     (load-view-files state)
+    ;;TODO: check views for circular dependencies.
     ))
 
 ;; TODO summoning skeletons
