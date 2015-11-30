@@ -117,6 +117,12 @@
 
 @export
 (defgeneric pack-rendering-data (env view &optional field-collection)
+  (:method ((env brac-reqstate) view-name &optional field-collection)
+    (declare (type symbol view-name))
+    (let ((view (get-view (appstate env) view-name)))
+      (if view
+	  (pack-rendering-data env view field-collection)
+	  (error "view-not-found"))))
   (:method ((env brac-reqstate) (view brac-view) &optional field-collection)
     (setf (root-view env) view)
     (setf (view-fields env)
@@ -131,15 +137,18 @@
     (when view
       (let ((state (appstate env))
 	    result)
+	(when (verbosep state)
+	  (format t "Rendering view: ~W~%" view))
 	(labels
 	    ((dep-call-results (v)
 	       (let ((deps (dependencies v))
-		     (ren-fun (renderable v)))
-		 (loop for d in deps
-		       with results
-		       do (push (dep-call-results (get-view state d))
-				results)
-		       return (apply ren-fun env results)))))
+		     (ren-fun (renderable v))
+		     d-values)
+		 (setf d-values
+		       (mapcar (lambda (d)
+				 (dep-call-results (get-view state d)))
+			       deps))
+		 (apply ren-fun env d-values))))
 	  (setf result (dep-call-results view)))
 	(setf (response-content env) result)))))
 
@@ -158,14 +167,17 @@
 	clack-response-form
 	nil))
 
+;;TODO: documentation for RESPONSE-CONTENT types.
 (defun to-clack-response (env)
-  (list
-   (status-code env)
-   (alexandria:hash-table-plist (response-headers env))
-   (let ((content (response-content env)))
-     (if (stringp content)
-	 (list content)
-	 content))))
+  (let ((content (response-content env)))
+    (if (functionp content)
+	(lack.component:call content (original-request env))
+	(list
+	 (status-code env)
+	 (alexandria:hash-table-plist (response-headers env))
+	 (if (stringp content)
+	     (list content)
+	     content)))))
 
 ;;TODO
 (defun load-builtin-views (state)

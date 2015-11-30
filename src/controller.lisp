@@ -93,14 +93,12 @@
 
     (defcontroller* brac-conf::file-contents env state
       (setf (response-content env)
-	    (lack.component:call
-	     (let ((st-path-ext (getf (extensions state) :static-content-path)))
+	    (let ((st-path-ext (getf (extensions state) :static-content-path)))
 	       (lack.app.file:make-app
 		:file (getf (routing-data env) :filename)
 		:root (or st-path-ext
 			  (uiop:merge-pathnames* #p"static/" ;;TODO no magic
-						 (root-path state)))))
-	     (original-request env)))
+						 (root-path state))))))
       env)
     t)
   (:documentation ""))
