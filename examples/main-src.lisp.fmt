@@ -1,0 +1,7 @@
+(in-package :~A~:*)
+(defpackage ~A~:*
+  (:use :cl :braculon)
+  (:documentation "TODO"))
+(in-package :~A~:*)
+
+(brac:load-app (asdf:system-source-directory :~A))

@@ -209,7 +209,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     ;;TODO: check views for circular dependencies.
     ))
 
-;; TODO summoning skeletons
+;; TODO summoning skeletons, error handling
 @export
 (defun wizard (path-to-app)
   "Answer the questions of the Wizard of Braculon and behold his wondrous magic."
