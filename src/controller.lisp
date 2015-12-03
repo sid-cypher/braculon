@@ -27,6 +27,7 @@
   (print-unreadable-object (ctrl stream :type t)
     (format stream "~A" (name ctrl))))
 
+;; TODO log failures
 @export
 (defgeneric get-controller (state ctrl-name)
   (:method ((state brac-appstate) ctrl-name)
@@ -72,7 +73,7 @@
 (defgeneric load-builtin-controllers (state)
   (:method ((state brac-appstate))
     (defcontroller* brac-conf::test env state
-      "Outputs a short greetings page. A tiny built-in controller for testing purposes."
+      "A tiny built-in controller for testing purposes."
       (setf (status-code env) 200)
       (setf (gethash :content-type (response-headers env)) "text/plain; charset=UTF-8")
       (setf (response-content env)
@@ -81,7 +82,7 @@
       env)
 
     (defcontroller* brac-conf::hello env state
-      "Outputs a short greetings page. A tiny built-in controller for testing purposes."
+      "Outputs a short greetings page."
       (declare (ignorable env))
       (setf (status-code env) 200)
       (setf (gethash :content-type (response-headers env)) "text/html; charset=UTF-8")

@@ -41,7 +41,11 @@
 
 (defvar *loaded-apps* '() "List of web apps that have been already loaded.")
 (defvar *running-apps* '() "List of web apps that are running.")
-(defvar *appstate* nil "Used in macros when loading files")
+
+@export
+(defvar *appstate* nil "Default argument in macros and functions")
+@export
+(defvar *reqstate* nil "Default argument in macros and functions")
 
 ;; TODO: move inside brac-appstate maybe?
 (defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
@@ -51,6 +55,10 @@
   ((name :reader name
 	 :type 'string
 	 :initform "[unnamed]"
+	 :documentation "")
+   (port :reader port
+	 :type fixnum
+	 :initform 5000
 	 :documentation "")
    (is-running-p :reader is-running-p
 		 :type 'boolean
@@ -226,33 +234,8 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 
 ;;TODO: use local-time
 @export
-(defgeneric start (appstate &key if-running server port)
-  (:method (app &key (if-running :restart) (server :woo) (port 5000))
-    (let ((state (find-app app)))
-      (when state
-	(start state :if-running if-running :server server :port port))))
-  (:method ((appstate brac-appstate) &key (if-running :restart) (server :woo) (port 5000))
-    (declare (type (member :error :skip :restart) if-running))
-    (flet ((actually-start ()
-	     (let ((clack-result (clack:clackup appstate :server server :port port
-						:use-default-middlewares nil)))
-	       (when clack-result
-		 (with-slots (clack-handler launch-time is-running-p) appstate
-		   (setf clack-handler clack-result)
-		   (setf launch-time (get-universal-time))
-		   (setf is-running-p t)
-		   (push appstate *running-apps*)
-		   clack-result)))))
-      (if (is-running-p appstate)
-	  (ecase if-running
-	    (:skip nil)
-	    (:restart (stop appstate)
-		      (actually-start))
-	    ;;TODO: define errmsg string constant elsewhere
-	    (:error (error "The app you have tried to start is already running.")))
-	  (actually-start))))
-  (:documentation
-   "This function starts (or, if applicable, restarts) your application.
+(defun start (&key (app *appstate*) (if-running :restart) (server :woo))
+  "This function starts (or, if applicable, restarts) your application.
  It accepts an app object (returned by LOAD-APP) or its name (string or symbol)
  as an argument. Providing a name results in calling FIND-APP internally.
  Starting an app includes adding it to *RUNNING-APPS* list, marking it as running
@@ -264,16 +247,35 @@ Key :IF-RUNNING takes one of following values:
 - :RESTART to restart the app if it was already running (default),
 - :SKIP to do nothing if the app was already running,
 - :ERROR to signal an error if, you guessed it, the app was running.
-Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
+Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
+  (declare (type (or brac-appstate string symbol) app)
+	   (type (member :error :skip :restart) if-running)
+	   (type symbol server))
+  (setf app (find-app app))
+  (flet ((actually-start ()
+	   (let ((clack-result (clack:clackup app :server server :port (port app)
+						       :use-default-middlewares nil)))
+	     (when clack-result
+	       (with-slots (clack-handler launch-time is-running-p) app
+		 (setf clack-handler clack-result)
+		 (setf launch-time (get-universal-time))
+		 (setf is-running-p t)
+		 (push app *running-apps*)
+		 clack-result)))))
+    (if (is-running-p app)
+	(ecase if-running
+	  (:skip nil)
+	  (:restart (stop :app app)
+	   (actually-start))
+	  ;;TODO: define errmsg string constant elsewhere
+	  (:error (error "The app you have tried to start is already running.")))
+	(actually-start))))
 
 @export
-(defgeneric stop (appstate)
-  (:method (name)
-    (let ((state (find-app name)))
-      (when state
-	(stop state))))
-  (:method ((state brac-appstate))
-    (with-slots (clack-handler launch-time is-running-p name) state
+(defun stop (&key (app *appstate*))
+  (let ((state (find-app app)))
+    (when state
+      (with-slots (clack-handler launch-time is-running-p name) state
 	(when clack-handler
 	  (clack:stop clack-handler)
 	  (setf clack-handler nil)
@@ -281,11 +283,11 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."))
 	  (setf *running-apps* (delete-if (lambda (an-app)
 					    (string= name (name an-app)))
 					  *running-apps*))
-	  t))))
+	  t)))))
 
 @export
 (defun unload-app (app)
-  (stop app)
+  (stop :app app)
   (let ((appname (if (typep app 'brac-appstate)
 		     (name app)
 		     (symbol-to-downcase-string app))))

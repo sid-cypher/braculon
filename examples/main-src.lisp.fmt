@@ -1,7 +1,16 @@
 (in-package :~A~:*)
 (defpackage ~A~:*
   (:use :cl :braculon)
-  (:documentation "TODO"))
+  (:documentation \"TODO\"))
 (in-package :~A~:*)
 
-(brac:load-app (asdf:system-source-directory :~A))
+(let ((brac:*appstate* (load-app (asdf:system-source-directory :~A~:*))))
+
+  (defview new-app-hello (:app-name) ()
+    (format nil \"Hello, world!~%~A is up and running~%\" (field :app-name)))
+
+  (defcontroller index
+    (init-rendering-data 'new-app-hello)
+    (setf (field :app-name) ~W))
+
+  (start))

@@ -110,7 +110,8 @@
 		(string= path (gethash :path-info (request env))))
 	(pack-routing-data env
 			   (get-router state 'brac-conf::fixed)
-			   (get-controller state ctrl-name)
+			   (or (get-controller state ctrl-name)
+			       (error "No controller named ~A was found" ctrl-name))
 			   nil)))
 
     (defrouter* brac-conf::test (env) state
@@ -118,7 +119,8 @@
 	      state env)
       (pack-routing-data env
 			 (get-router state 'brac-conf::test)
-			 (get-controller state 'brac-conf::test)
+			 (or (get-controller state 'brac-conf::test)
+			     (error "No controller named ~A was found" 'brac-conf::test))
 			 nil))
 
     ;; TODO: build-folder-index, recursive, separator, controller
