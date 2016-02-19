@@ -167,18 +167,6 @@
 	clack-response-form
 	nil))
 
-;;TODO: documentation for RESPONSE-CONTENT types.
-(defun to-clack-response (env)
-  (let ((content (response-content env)))
-    (if (functionp content)
-	(lack.component:call content (original-request env))
-	(list
-	 (status-code env)
-	 (alexandria:hash-table-plist (response-headers env))
-	 (if (stringp content)
-	     (list content)
-	     content)))))
-
 ;;TODO
 (defun load-builtin-views (state)
   nil)

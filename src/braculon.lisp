@@ -68,38 +68,30 @@
 	      :documentation "")
    (config-file :reader config-file
 		:documentation "")
-   (routers :reader routers
-	    :initform (make-hash-table :test 'eq)
-	    :documentation "")
-   (routers-path :reader routers-path
-		 :documentation "")
-   (routing-chain :accessor routing-chain ;;TODO: custom setter
-		  :initform '()
-		  :documentation "")
-   (controllers :reader controllers
-		:initform (make-hash-table :test 'eq)
-		:documentation "")
-   (controllers-path :reader controllers-path
-		     :documentation "")
+   (chains :reader chains
+           :initform (make-hash-table :test 'equal)
+           :documentation "")
+   (rules :reader rules
+          :initform (make-hash-table :test 'equal)
+          :documentation "")
+   (actions :reader actions
+            :initform (make-hash-table :test 'equal)
+            :documentation "")
+   (starting-chain :accessor starting-chain ;;TODO: custom setter
+                   :initform "input"
+                   :documentation "")
    (view-compilers :reader view-compilers
 		   :initform (make-hash-table :test 'eq)
 		   :documentation "")
-   (view-compilers-path :reader view-compilers-path
-			:documentation "")
    (views :reader views
 	  :initform (make-hash-table :test 'eq)
 	  :documentation "")
-   (views-path :reader views-path
-	       :documentation "")
    (verbose :type boolean
 	    :reader verbosep
 	    :initform t
 	    :documentation "")
    (reader-package :accessor reader-package ;;TODO: improve this
                    :initform :braculon)
-   (extensions :reader extensions
-	       :initform (make-hash-table :test 'eq)
-	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
    (launch-time :reader launch-time
 		:documentation "")
    (clack-handler :initform nil))
@@ -119,13 +111,17 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		 :original-request clack-env
 		 :request (hash-original-request clack-env)))
 
-(defgeneric process-request (env)
-  (:method ((env brac-reqstate))
-    (chain-route-request env)
-    (call-controller env)
-    (render env)
-    (to-clack-response env))
-  (:documentation ""))
+;;TODO: documentation for RESPONSE-CONTENT types.
+(defun to-clack-response (env)
+  (let ((content (response-content env)))
+    (if (functionp content)
+	(lack.component:call content (original-request env))
+	(list
+	 (response-status-code env)
+	 (alexandria:hash-table-plist (response-headers env))
+	 (if (stringp content)
+	     (list content)
+	     content)))))
 
 (defmethod lack.component:to-app ((state brac-appstate))
   "This method is called by Clack to get a callback function that will be used for each incoming HTTP request to your app."
@@ -134,6 +130,14 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   (lambda (clack-env)
     (process-request
      (wrap-request clack-env state))))
+
+(defgeneric process-request (env)
+  (:method ((env brac-reqstate))
+    (chain-route-request env)
+    (call-controller env)
+    (render env)
+    (to-clack-response env))
+  (:documentation ""))
 
 ;; TODO macroexpand writers that call registered hooks
 (defun (setf name) (value object)

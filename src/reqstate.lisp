@@ -6,22 +6,14 @@
 (defclass brac-reqstate ()
   ((appstate :reader appstate
 	     :initarg :appstate)
-   (router :accessor router
-	   :initform nil)
-   (controller :accessor controller
-	       :initform nil)
-   (root-view :accessor root-view
-	      :initform nil)
-   (routing-data :accessor routing-data
-		 :initform nil)
-   (controller-data :accessor controller-data
-		    :initform nil)
-   (view-fields :accessor view-fields)
+   (datastore :accessor datastore
+              :initform (make-hash-table :test 'eq)
+              :type hash-table)
    (original-request :reader original-request
 		     :initarg :original-request)
    (request :accessor request
 	    :initarg :request)
-   (response-status-code :accessor status-code
+   (response-status-code :accessor response-status-code
 			 :initarg :status-code
 			 :initform 200
 			 :type fixnum)
@@ -29,19 +21,12 @@
 		     :initform (make-hash-table :test 'eq)
 		     :type hash-table)
    (response-content :accessor response-content
-                     :initform ""
 		     :initarg :response)))
 
 (defmethod print-object ((req brac-reqstate) stream)
   (print-unreadable-object (req stream :type t)
     (with-slots (router controller root-view) req
-      (format stream "router:~A, ctrl:~A, view:~A"
-	      (or (unless router "nil")
-		  (symbol-name (name router)))
-	      (or (unless controller "nil")
-		  (symbol-name (name controller)))
-	      (or (unless root-view "nil")
-		  (symbol-name (name root-view)))))))
+      (format stream "req:~A" (request req)))))
 
 (defun format-request (env &key (format-control "~A: ~W~%") no-headers)
   (with-output-to-string (stream)
