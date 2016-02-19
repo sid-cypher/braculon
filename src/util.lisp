@@ -90,37 +90,37 @@
 		   :name (or name (pathname-name source-name))
 		   :type (or type (pathname-type source-name)))))
 
-(defun read-first-form-file (filepath)
+(defun read-first-form-file (filepath &optional package)
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
     ;;TODO push a message through event logging system, log errors
-    (uiop:with-safe-io-syntax (:package :brac-conf)
+    (uiop:with-safe-io-syntax (:package (or package :brac-conf))
       (with-open-file (stream truepath)
 	(read stream :eof-value nil)))))
 
-(defun read-single-form-file (filepath)
+(defun read-single-form-file (filepath &optional package)
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
     ;;TODO push a message through event logging system, log errors
-    (uiop:with-safe-io-syntax (:package :brac-conf)
+    (uiop:with-safe-io-syntax (:package (or package :brac-conf))
       (with-open-file (stream truepath)
 	(let ((first-form (ignore-errors (read stream))))
 	  (unless (ignore-errors (read stream))
 	    first-form))))))
 
-(defun read-multiple-forms-file (filepath)
+(defun read-multiple-forms-file (filepath &optional package)
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
     (ignore-errors ;;TODO push a message through event logging system
-      (uiop:with-safe-io-syntax (:package :brac-conf)
-	(with-open-file (stream truepath)
-	  (handler-bind ((end-of-file (lambda (err)
-					(declare (ignorable err))
-					(invoke-restart 'finish-read-loop))))
-	    (loop named :multiform-read-loop
-	       as read-form = (restart-case (read stream)
-				(finish-read-loop () (return-from :multiform-read-loop read-forms)))
-	       collect read-form into read-forms)))))))
+     (uiop:with-safe-io-syntax (:package (or package :brac-conf))
+       (with-open-file (stream truepath)
+         (handler-bind ((end-of-file (lambda (err)
+                                       (declare (ignorable err))
+                                       (invoke-restart 'finish-read-loop))))
+           (loop named :multiform-read-loop
+                 as read-form = (restart-case (read stream)
+                                  (finish-read-loop () (return-from :multiform-read-loop read-forms)))
+                 collect read-form into read-forms)))))))
 
 (defun filter-single-pathname-type (filelist typestr)
   "Accepts a list of pathnames and filters it to return a list with pathnames

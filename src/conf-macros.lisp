@@ -1,4 +1,4 @@
-(in-package :brac-conf)
+(in-package :brac)
 
 #+nil
 (let ((using-packages (getf (brac:extensions brac:*appstate*)

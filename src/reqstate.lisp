@@ -29,6 +29,7 @@
 		     :initform (make-hash-table :test 'eq)
 		     :type hash-table)
    (response-content :accessor response-content
+                     :initform ""
 		     :initarg :response)))
 
 (defmethod print-object ((req brac-reqstate) stream)

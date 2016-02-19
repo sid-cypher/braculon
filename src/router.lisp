@@ -65,12 +65,6 @@
 	    (setf env new-env)
 	    (return))))
       ;;TODO: render default response if all fails.
-      #+nil
-      (setf (response env) ;default response to be overwritten
-	    '(404 ;TODO: default error router with logging
-	      (:content-type "text/html; charset=utf-8")
-	      ("<html><head><title>Not found</title></head>
-<body> Resource not found. </body></html>")))
       env)))
 
 ;;TODO add hooks into router slot writer
@@ -102,35 +96,35 @@
 (defgeneric load-builtin-routers (state)
   (:method ((state brac-appstate))
     ;;TODO with regex option
-    (defrouter* brac-conf::fixed (env path ctrl-name &key (trailing-slash-option t)) state
+    (defrouter* braculon::fixed (env path ctrl-name &key (trailing-slash-option t)) state
       (declare (type string path)
 	       (type symbol ctrl-name))
       (when (if trailing-slash-option
 		(string-and-slash= path (gethash :path-info (request env)))
 		(string= path (gethash :path-info (request env))))
 	(pack-routing-data env
-			   (get-router state 'brac-conf::fixed)
+			   (get-router state 'braculon::fixed)
 			   (or (get-controller state ctrl-name)
 			       (error "No controller named ~A was found" ctrl-name))
 			   nil)))
 
-    (defrouter* brac-conf::test (env) state
+    (defrouter* braculon::test (env) state
       (format t "Test router reporting.~%state: ~W~%env: ~W~%"
 	      state env)
       (pack-routing-data env
-			 (get-router state 'brac-conf::test)
-			 (or (get-controller state 'brac-conf::test)
-			     (error "No controller named ~A was found" 'brac-conf::test))
+			 (get-router state 'braculon::test)
+			 (or (get-controller state 'braculon::test)
+			     (error "No controller named ~A was found" 'braculon::test))
 			 nil))
 
     ;; TODO: build-folder-index, recursive, separator, controller
-    (defrouter* brac-conf::static (env) state
+    (defrouter* braculon::static (env) state
       (let ((router-data '(:filename "wavy.png")))
 	(setf (routing-data env) router-data)
 	(when (string-and-slash= "/wavy" (gethash :path-info (request env)))
 	  (pack-routing-data env
-			     (get-router state 'brac-conf::static)
-			     (get-controller state 'brac-conf::file-contents)
+			     (get-router state 'braculon::static)
+			     (get-controller state 'braculon::file-contents)
 			     router-data))))
     ;; ===old===
     #+nil(destructuring-bind (&key folder url-prefix data) options
@@ -147,20 +141,20 @@
 		 matchp)
 	     (setf (router-data req) nil)
 	     (loop for file in static-files
-		while (not matchp) do
-		;; trailing slash :deny \(later :allow, :require)
-		  (when (string= (url-req-path-name req)
-				 (cat prefix (file-namestring file)))
-		    (setf (router-data req) (list :file file
-						  :data data))
-		    (setf matchp t)))
+                   while (not matchp) do
+                     ;; trailing slash :deny \(later :allow, :require)
+                     (when (string= (url-req-path-name req)
+                                    (cat prefix (file-namestring file)))
+                       (setf (router-data req) (list :file file
+                                                     :data data))
+                       (setf matchp t)))
 	     (when matchp
 	       "file-contents")))
 
-    #+nil(defrouter* brac-conf::redirect (env) state
-      nil)
-    #+nil(defrouter* brac-conf::masquerade (env) state
-      nil)
+    #+nil(defrouter* braculon::redirect (env) state
+           nil)
+    #+nil(defrouter* braculon::masquerade (env) state
+           nil)
     t)
   (:documentation ""))
 
@@ -172,7 +166,7 @@
   (:method ((state brac-appstate))
     (let ((router-src-files (uiop:directory-files (routers-path state))))
       (dolist (filepath router-src-files)
-	(let ((src-form (read-single-form-file filepath)))
+	(let ((src-form (read-single-form-file filepath (reader-package state))))
 	  (let* ((fcall-symbol (when (and (consp src-form)
 					  (symbolp (first src-form)))
 				 (first src-form)))
@@ -184,6 +178,6 @@
 		      filepath rtr-name)
 	      (let ((brac::*appstate* state)
 		    (brac::*router-src-file* filepath)
-		    (*package* (find-package :brac-conf)))
+		    (*package* (find-package (reader-package state))))
 		(eval src-form))))))))
   (:documentation ""))

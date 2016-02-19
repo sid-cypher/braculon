@@ -71,30 +71,32 @@
    (routers :reader routers
 	    :initform (make-hash-table :test 'eq)
 	    :documentation "")
-   (routing-chain :reader routing-chain
+   (routers-path :reader routers-path
+		 :documentation "")
+   (routing-chain :accessor routing-chain ;;TODO: custom setter
 		  :initform '()
 		  :documentation "")
    (controllers :reader controllers
 		:initform (make-hash-table :test 'eq)
 		:documentation "")
+   (controllers-path :reader controllers-path
+		     :documentation "")
    (view-compilers :reader view-compilers
 		   :initform (make-hash-table :test 'eq)
 		   :documentation "")
+   (view-compilers-path :reader view-compilers-path
+			:documentation "")
    (views :reader views
 	  :initform (make-hash-table :test 'eq)
 	  :documentation "")
-   (routers-path :reader routers-path
-		 :documentation "")
-   (controllers-path :reader controllers-path
-		     :documentation "")
    (views-path :reader views-path
 	       :documentation "")
-   (view-compilers-path :reader view-compilers-path
-			:documentation "")
    (verbose :type boolean
 	    :reader verbosep
 	    :initform t
 	    :documentation "")
+   (reader-package :accessor reader-package ;;TODO: improve this
+                   :initform :braculon)
    (extensions :reader extensions
 	       :initform (make-hash-table :test 'eq)
 	       :documentation "Additional parameters can be injected here by loadable modules at runtime.")
@@ -156,7 +158,8 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 
 (defun fill-slots-with-config-file-settings (config-form config-path given-root-path appstate)
   (with-slots (name root-path config-file routing-chain routers-path
-		    controllers-path views-path view-compilers-path extensions verbose) appstate
+               controllers-path views-path view-compilers-path
+               extensions reader-package verbose) appstate
     ;; TODO: thoroughly check user inputs from config file
     (let ((r-path (uiop:merge-pathnames*
 		   (getf config-form :routers-path #p"routers/") given-root-path))
@@ -199,6 +202,7 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
        views-path v-path
        view-compilers-path vc-path
        extensions (getf config-form :extensions)
+       reader-package (getf config-form :reader-package)
        verbose (getf config-form :verbose t)))))
 
 ;; TODO finish this
@@ -314,7 +318,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
     (unload-app state)
     (let ((new-state (load-app (root-path state))))
       (when was-running
-	(start new-state))
+	(start :app new-state))
       new-state)))
 
 (defmacro list-those-apps (applist)

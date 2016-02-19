@@ -112,7 +112,7 @@
   (:method ((state brac-appstate))
     (let ((controller-src-files (uiop:directory-files (controllers-path state))))
       (dolist (filepath controller-src-files)
-	(let ((src-form (read-single-form-file filepath)))
+	(let ((src-form (read-single-form-file filepath (reader-package state))))
 	  (let* ((fcall-symbol (when (and (consp src-form)
 					  (symbolp (first src-form)))
 				 (first src-form)))
@@ -126,6 +126,6 @@
 
 	      (let ((brac::*appstate* state)
 		    (brac::*controller-src-file* filepath)
-		    (*package* (find-package :brac-conf)))
+		    (*package* (find-package (reader-package state))))
 		(eval src-form))))))))
   (:documentation ""))
