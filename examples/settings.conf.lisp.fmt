@@ -1,5 +1,0 @@
-(app-config
-  :name ~W
-  :port ~A
-  :routing-chain ((fixed \"/\" index)
-		  static))
