@@ -12,7 +12,8 @@
    (original-request :reader original-request
 		     :initarg :original-request)
    (request :accessor request
-	    :initarg :request)
+	    :initarg :request
+            :type hash-table)
    (response-status-code :accessor response-status-code
 			 :initarg :status-code
 			 :initform 200
@@ -23,12 +24,37 @@
    (response-content :accessor response-content
 		     :initarg :response)))
 
-(defmethod print-object ((req brac-reqstate) stream)
-  (print-unreadable-object (req stream :type t)
-    (with-slots (router controller root-view) req
-      (format stream "req:~A" (request req)))))
+(defmethod print-object ((rs brac-reqstate) stream)
+  (print-unreadable-object (rs stream :type t)
+    (with-slots (router controller root-view) rs
+      (format stream "reqstate:~A" (request rs)))))
 
-(defun format-request (env &key (format-control "~A: ~W~%") no-headers)
+(defvar *current-rs* nil)
+
+(defun rq (key &optional (rs *current-rs*))
+  (gethash (name-to-keyword key) (datastore rs)))
+
+;;TODO: check if this is needed
+(defun (setf rq) (key value &optional (rs *current-rs*))
+  (setf (gethash (name-to-keyword key) (datastore rs)) value))
+
+(defun rq-clear (key &optional (rs *current-rs*))
+  (remhash (name-to-keyword key) (datastore rs)))
+
+(defun rq-data (key &optional (rs *current-rs*))
+  (gethash (name-to-keyword key) (datastore rs)))
+
+;;(defun (setf rq-data) (key value &optional (rs *current-rs*))
+;;(setf (gethash (name-to-keyword key) (datastore rs)) value))
+
+(defun rq-data-clear (key &optional (rs *current-rs*))
+  (remhash (name-to-keyword key) (datastore rs)))
+
+(defun res-hdr (key &optional (rs *current-rs*))
+  (princ (format-request rs))
+  (gethash (name-to-downcase-string key) (response-headers rs)))
+
+(defun format-request (rs &key (format-control "~A: ~W~%") no-headers)
   (with-output-to-string (stream)
     (labels
 	((loop-ht (ht)
@@ -44,7 +70,11 @@
 			  (loop-ht v)
 			  (write-line "--- END HEADERS ---"
 				      stream))))))
-      (loop-ht (request env)))))
+      (write-line "---- REQUEST ----" stream)
+      (loop-ht (request rs))
+      (write-line "--- DATASTORE ---" stream)
+      (loop-ht (datastore rs))
+      (write-line "-----------------" stream))))
 
-(defun hash-original-request (env)
-  (alexandria:plist-hash-table env :test 'eq :size 22))
+(defun hash-original-request (rs)
+  (alexandria:plist-hash-table rs :test 'eq :size 22))

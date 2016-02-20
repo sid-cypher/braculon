@@ -12,13 +12,20 @@
   "mutes the stdout unless overridden"
   `(let ((*standard-output* (make-broadcast-stream)))
      ;;TODO: scan for *std-out* redefs in body.
-    ,@bod))
+     ,@bod))
 
-(defun symbol-to-downcase-string (namesym)
+(defun name-to-downcase-string (namesym)
   (declare (type (or string symbol) namesym))
   (etypecase namesym
     (string namesym)
     (symbol (string-downcase (symbol-name namesym)))))
+
+(defun name-to-keyword (namesym)
+  (declare (type (or string symbol) namesym))
+  (intern (etypecase namesym
+            (string (string-upcase namesym))
+            (symbol (symbol-name namesym)))
+          :keyword))
 
 (defun string-and-slash= (argpath matchpath)
   "TODO"

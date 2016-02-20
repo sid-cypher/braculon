@@ -3,18 +3,15 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-ctrl ()
-  ((appstate :reader appstate
-	     :initarg :parent
-	     :initform (error "Controller object needs a parent appstate.")
-	     :documentation "")
-   (name :reader name
+(defclass brac-action ()
+  ((name :reader name
 	 :initarg :name
-	 :initform (error "Controller object needs a name symbol.")
-	 :documentation "")
+	 :initform (error "Action object needs a name symbol.")
+         :type string
+         :documentation "")
    (callable :reader callable
 	     :initarg :callable
-	     :initform (error "Controller object needs it callable part.")
+	     :initform (error "Action object needs it callable part.")
 	     :documentation "")
    (source-file :reader source-file
 		:initarg :source-file
@@ -23,109 +20,74 @@
 	      :initform (local-time:now)
 	      :documentation "")))
 
-(defmethod print-object ((ctrl brac-ctrl) stream)
-  (print-unreadable-object (ctrl stream :type t)
-    (format stream "~A" (name ctrl))))
+(defmethod print-object ((action brac-action) stream)
+  (print-unreadable-object (action stream :type t)
+    (format stream "~A" (name action))))
 
 ;; TODO log failures
 @export
-(defgeneric get-controller (state ctrl-name)
-  (:method ((state brac-appstate) ctrl-name)
-    (declare (type symbol ctrl-name))
-    (with-slots (controllers) state
-      (gethash ctrl-name controllers)))
+(defgeneric get-action (appstate action-name)
+  (:method ((appstate brac-appstate) action-name)
+    ""
+    (declare (type (or string symbol) action-name))
+    (gethash (name-to-downcase-string action-name) (actions appstate)))
   (:documentation ""))
 
 ;; TODO hooks, maybe log, no-overwrite option
-(defgeneric add-controller (state ctrl)
-  (:method ((state brac-appstate) (ctrl brac-ctrl))
-    "" ;; TODO
-    (with-slots (controllers) state
-      (setf (gethash (name ctrl) controllers) ctrl)))
+(defgeneric add-action (appstate action)
+  (:method ((appstate brac-appstate) (action brac-action))
+    ""
+    (setf (gethash (name action) (actions appstate)) action))
   (:documentation ""))
 
-;; TODO hooks
-(defgeneric del-controller (state ctrl-name)
-  (:method ((state brac-appstate) ctrl-name)
-    (with-slots (controllers) state
-      (remhash ctrl-name controllers)))
+;;TODO add hooks
+(defgeneric del-action (appstate action-name)
+  (:method ((appstate brac-appstate) action-name)
+    ""
+    (declare (type (or symbol string) action-name))
+    (with-slots (actions) appstate
+      (remhash (name-to-downcase-string action-name) actions)))
   (:documentation ""))
 
-;;TODO: rewrite so that only env is returned.
-(defgeneric call-controller (env)
-  (:method ((env brac-reqstate))
-    (let ((ctrl (controller env)))
-      (when ctrl
-	(funcall (callable ctrl)
-		 env))))
-  (:documentation ""))
+(defmacro defaction (name reqstate-symbol appstate lambda-list &body body)
+  (declare (type (or symbol string) name)
+           (type symbol reqstate-symbol)
+	   (type list lambda-list))
+  `(add-action ,appstate
+               (make-instance 'brac-action
+                              :name ',(name-to-downcase-string name)
+                              :callable (lambda ,(cons reqstate-symbol lambda-list)
+                                          (let ((*current-rs* ,reqstate-symbol))
+                                            ,@body
+                                            ,reqstate-symbol))
+                              :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*)))))
 
-(defmacro defcontroller* (name env-var appstate &body body)
-  (declare (type symbol name env-var))
-  `(add-controller ,appstate
-		   (make-instance 'brac-ctrl
-				  :parent ,appstate
-				  :name ',name
-				  :callable (lambda (,env-var) ,@body)
-				  :source-file nil)))
+;; TODO return new rs only.
+(defgeneric load-builtin-actions (appstate)
+  (:method ((appstate brac-appstate))
+    (defaction test rs appstate ()
+      ;;A tiny built-in action for testing purposes.
+      (setf (status-code rs) 200)
+      (setf (res-hdr :content-type) "text/plain; charset=UTF-8")
+      (setf (response-content rs)
+	    (format nil "Test action reporting.~%appstate: ~W~%rs: ~W~%~A~%"
+		    appstate rs (format-request rs))))
 
-;; TODO return new env only.
-(defgeneric load-builtin-controllers (state)
-  (:method ((state brac-appstate))
-    (defcontroller* brac-conf::test env state
-      "A tiny built-in controller for testing purposes."
-      (setf (status-code env) 200)
-      (setf (gethash :content-type (response-headers env)) "text/plain; charset=UTF-8")
-      (setf (response-content env)
-	    (format nil "Test controller reporting.~%state: ~W~%env: ~W~%~A~%"
-		    state env (format-request env)))
-      env)
-
-    (defcontroller* brac-conf::hello env state
-      "Outputs a short greetings page."
-      (declare (ignorable env))
-      (setf (status-code env) 200)
-      (setf (gethash :content-type (response-headers env)) "text/html; charset=UTF-8")
-      (setf (response-content env)
+    (defaction hello rs appstate ()
+      ;;Outputs a short greetings page.
+      (setf (status-code rs) 200)
+      (setf (res-hdr :content-type) "text/html; charset=UTF-8")
+      (setf (response-content rs)
 	    (list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 		    (:html (:head (:title "braculon:hello"))
-			   (:body (:p "Hello! Things seem to work here."))))))
-      env)
+			   (:body (:p "Hello! Things seem to work here.")))))))
 
-    (defcontroller* brac-conf::file-contents env state
-      (setf (response-content env)
-	    (let ((st-path-ext (getf (extensions state) :static-content-path)))
-	       (lack.app.file:make-app
-		:file (getf (routing-data env) :filename)
-		:root (or st-path-ext
-			  (uiop:merge-pathnames* #p"static/" ;;TODO no magic
-						 (root-path state))))))
-      env)
+    (defaction file rs appstate (pathname)
+      (setf (response-content rs)
+            (lack.app.file:make-app
+             :file (getf (routing-data rs) :filename)
+             :root (or pathname
+                       (uiop:merge-pathnames* #p"static/" ;;TODO no magic
+                                              (root-path appstate))))))
     t)
-  (:documentation ""))
-
-;;TODO: remove special variables in favor of ENV keys
-(defvar *controller-src-file* nil)
-
-;; TODO check file format
-(defgeneric load-controller-files (state)
-  (:method ((state brac-appstate))
-    (let ((controller-src-files (uiop:directory-files (controllers-path state))))
-      (dolist (filepath controller-src-files)
-	(let ((src-form (read-single-form-file filepath (reader-package state))))
-	  (let* ((fcall-symbol (when (and (consp src-form)
-					  (symbolp (first src-form)))
-				 (first src-form)))
-		 (ctrl-name (when (consp (rest src-form))
-			      (second src-form)))) ;; TODO report errors
-
-	    (when (and (string= (symbol-name fcall-symbol) "DEFCONTROLLER")
-		       (symbolp ctrl-name))
-	      (format t "Controller definition file found: ~A; name: ~W~%"
-		      filepath ctrl-name)
-
-	      (let ((brac::*appstate* state)
-		    (brac::*controller-src-file* filepath)
-		    (*package* (find-package (reader-package state))))
-		(eval src-form))))))))
   (:documentation ""))

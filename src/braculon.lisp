@@ -236,9 +236,9 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   (declare (type (or string symbol brac-appstate) name))
   (if (typep name 'brac-appstate) name
       (find name *loaded-apps*
-	:test (lambda (namearg an-app)
-		(string= (name an-app)
-			 (symbol-to-downcase-string namearg))))))
+            :test (lambda (namearg an-app)
+                    (string= (name an-app)
+                             (name-to-downcase-string namearg))))))
 
 ;;TODO: use local-time
 @export
@@ -298,11 +298,11 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
   (stop :app app)
   (let ((appname (if (typep app 'brac-appstate)
 		     (name app)
-		     (symbol-to-downcase-string app))))
+		     (name-to-downcase-string app))))
     (setf *loaded-apps*
-	(delete-if (lambda (an-app)
-		     (string= (name an-app) appname))
-		   *loaded-apps*))))
+          (delete-if (lambda (an-app)
+                       (string= (name an-app) appname))
+                     *loaded-apps*))))
 
 @export
 (defun load-app (path)
