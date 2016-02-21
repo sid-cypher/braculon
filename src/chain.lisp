@@ -6,7 +6,7 @@
 (defclass brac-chain ()
   ((name :reader name
 	 :initarg :name
-	 :initform (error "Chain object needs a name symbol.")
+	 :initform (error "Chain object needs a name.")
          :type string
          :documentation "")
    (configuration :accessor configuration

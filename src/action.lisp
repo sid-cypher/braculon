@@ -6,7 +6,7 @@
 (defclass brac-action ()
   ((name :reader name
 	 :initarg :name
-	 :initform (error "Action object needs a name symbol.")
+	 :initform (error "Action object needs a name.")
          :type string
          :documentation "")
    (callable :reader callable

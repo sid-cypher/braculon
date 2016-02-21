@@ -10,7 +10,8 @@
 	     :documentation "")
    (name :reader name
 	 :initarg :name
-	 :initform (error "View object needs a name symbol.")
+	 :initform (error "View object needs a name.")
+         :type string
 	 :documentation "")
    (fields :reader fields
 	   :initarg :fields
@@ -37,28 +38,27 @@
   (print-unreadable-object (view stream :type t)
     (format stream "~A" (name view))))
 
-;; TODO write, with hooks later
-(defgeneric add-view (state view)
-  (:method ((state brac-appstate) (view brac-view))
-    "" ;; TODO
-    (with-slots (views) state
-      (setf (gethash (name view) views) view)))
+(defgeneric get-view (appstate view-name)
+  (:method ((appstate brac-appstate) view-name)
+    ""
+    (declare (type (or string symbol) view-name))
+    (gethash (name-to-downcase-string view-name) (views appstate)))
   (:documentation ""))
 
-;; TODO hooks
-(defgeneric del-view (state view-name)
-  (:method ((state brac-appstate) view-name)
-    (declare (type symbol view-name))
-    (with-slots (views) state
-      (remhash view-name views)))
+;; TODO hooks, maybe log, no-overwrite option
+(defgeneric add-view (appstate view)
+  (:method ((appstate brac-appstate) (view brac-view))
+    ""
+    (setf (gethash (name view) (views appstate)) view))
   (:documentation ""))
 
-(defgeneric get-view (state view-name)
-  (:method ((state brac-appstate) view-name)
-    (declare (type symbol view-name))
-    (gethash view-name (slot-value state 'views)))
-  (:method ((env brac-reqstate) view-name)
-    (get-view (appstate env) view-name))
+;;TODO add hooks
+(defgeneric del-view (appstate view-name)
+  (:method ((appstate brac-appstate) view-name)
+    ""
+    (declare (type (or symbol string) view-name))
+    (with-slots (views) appstate
+      (remhash (name-to-downcase-string view-name) views)))
   (:documentation ""))
 
 ;;TODO walk view dependencies, get full length, add keys
@@ -170,29 +170,3 @@
 ;;TODO
 (defun load-builtin-views (state)
   nil)
-
-;;TODO: remove special variables in favor of ENV keys
-(defvar *view-src-file* nil)
-
-;; TODO review file format, rewrite
-(defgeneric load-view-files (state)
-  (:method ((state brac-appstate))
-    (let ((view-src-files (uiop:directory-files (views-path state))))
-      (dolist (filepath view-src-files)
-	(let ((src-form (read-single-form-file filepath (reader-package state))))
-	  (let* ((fcall-symbol (when (and (consp src-form)
-					  (symbolp (first src-form)))
-				 (first src-form)))
-		 (view-name (when (consp (rest src-form))
-			      (second src-form)))) ;; TODO report errors
-	    (when (and (string= (symbol-name fcall-symbol) "DEFVIEW")
-		       (symbolp view-name))
-
-	      (format t "View definition file found: ~A; name: ~W~%"
-		      filepath view-name)
-
-	      (let ((brac::*appstate* state)
-		    (brac::*view-src-file* filepath)
-		    (*package* (find-package (reader-package state))))
-		(eval src-form))))))))
-  (:documentation ""))

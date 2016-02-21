@@ -71,20 +71,20 @@
    (chains :reader chains
            :initform (make-hash-table :test 'equal)
            :documentation "")
-   (rules :reader rules
-          :initform (make-hash-table :test 'equal)
-          :documentation "")
+   (conditions :reader conditions
+               :initform (make-hash-table :test 'equal)
+               :documentation "")
    (actions :reader actions
             :initform (make-hash-table :test 'equal)
             :documentation "")
    (starting-chain :accessor starting-chain ;;TODO: custom setter
-                   :initform "input"
+                   :initform "init"
                    :documentation "")
    (view-compilers :reader view-compilers
-		   :initform (make-hash-table :test 'eq)
+		   :initform (make-hash-table :test 'equal)
 		   :documentation "")
    (views :reader views
-	  :initform (make-hash-table :test 'eq)
+	  :initform (make-hash-table :test 'equal)
 	  :documentation "")
    (verbose :type boolean
 	    :reader verbosep
