@@ -49,18 +49,53 @@
       (remhash (name-to-downcase-string action-name) actions)))
   (:documentation ""))
 
+(defvar *action-finish* nil)
+(defvar *jump-chain* nil)
+
 (defmacro defaction (name reqstate-symbol appstate lambda-list &body body)
+  `(add-action ,appstate
+               (make-action ,name ,reqstate-symbol ,lambda-list
+                 ,@body)))
+
+(defmacro make-action (name reqstate-symbol lambda-list &body body)
   (declare (type (or symbol string) name)
            (type symbol reqstate-symbol)
 	   (type list lambda-list))
-  `(add-action ,appstate
-               (make-instance 'brac-action
-                              :name ',(name-to-downcase-string name)
-                              :callable (lambda ,(cons reqstate-symbol lambda-list)
-                                          (let ((*current-rs* ,reqstate-symbol))
-                                            ,@body
-                                            ,reqstate-symbol))
-                              :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*)))))
+  (let ((action-block-name (gensym "ACTIONBLOCK")))
+    `(make-instance
+      'brac-action
+      :name ',(name-to-downcase-string name)
+      :callable (lambda ,(cons reqstate-symbol lambda-list)
+                  (let ((*current-rs* ,reqstate-symbol)
+                        (*action-finish* :pass)
+                        *jump-chain*)
+                    (block ,action-block-name
+                      (flet ((finish (act-fin-type &optional chain-spec)
+                               (declare (type (member :send :pass :jump :skip :drop)
+                                              act-fin-type))
+                               (when chain-spec
+                                 (setf *jump-chain* chain-spec))
+                               (setf *action-finish* act-fin-type))
+                             (send-now ()
+                               (setf *action-finish* :send)
+                               (return-from ,action-block-name))
+                             (pass-now ()
+                               (setf *action-finish* :pass)
+                               (return-from ,action-block-name))
+                             (jump-now (chain-spec)
+                               (setf *action-finish* :jump)
+                               (setf *jump-chain* chain-spec)
+                               (return-from ,action-block-name))
+                             (skip-now ()
+                               (setf *action-finish* :skip)
+                               (return-from ,action-block-name))
+                             (drop-now ()
+                               (setf *action-finish* :drop)
+                               (return-from ,action-block-name)))
+                        ,@body)
+                      (values ,reqstate-symbol *action-finish* *jump-chain*))))
+      :source-file (load-time-value
+                    (or #.*compile-file-pathname* *load-pathname*)))))
 
 ;; TODO return new rs only.
 (defgeneric load-builtin-actions (appstate)

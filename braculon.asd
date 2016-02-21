@@ -27,3 +27,13 @@
 	       (:static-file "LICENSE.md"))
   :description "Modular and customizable Clack-based web framework"
   :long-description "")
+
+(defsystem :braculon-test
+  :depends-on (:braculon
+               :fiveam
+               :drakma)
+  :components ((:module "test"
+                :serial t
+                :components ((:file "test-app")
+                             (:file "def-tests"))))
+  :description "Tools for automatic verification of braculon code correctness.")

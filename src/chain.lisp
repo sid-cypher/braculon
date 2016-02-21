@@ -9,10 +9,9 @@
 	 :initform (error "Chain object needs a name symbol.")
          :type string
          :documentation "")
-   (callable :reader callable
-	     :initarg :callable
-	     :initform (error "Chain object needs it callable part.")
-	     :documentation "")
+   (configuration :accessor configuration
+                  :initarg :configuration
+                  :documentation "")
    (source-file :reader source-file
 		:initarg :source-file
 		:documentation "")

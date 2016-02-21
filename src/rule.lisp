@@ -56,7 +56,7 @@
              (make-instance 'brac-rule
                             :name ',(name-to-downcase-string name)
                             :callable (lambda ,(cons reqstate-symbol lambda-list)
-                                        (let ((*current-rs* ,reqstate-symbol))
+                                        (let ((brac::*current-rs* ,reqstate-symbol))
                                           ,@body))
                             :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*)))))
 

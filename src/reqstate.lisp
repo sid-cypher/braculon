@@ -31,26 +31,26 @@
 
 (defvar *current-rs* nil)
 
-(defun rq (key &optional (rs *current-rs*))
+(defun rq (key &optional (rs brac::*current-rs*))
   (gethash (name-to-keyword key) (datastore rs)))
 
 ;;TODO: check if this is needed
-(defun (setf rq) (key value &optional (rs *current-rs*))
+(defun (setf rq) (key value &optional (rs brac::*current-rs*))
   (setf (gethash (name-to-keyword key) (datastore rs)) value))
 
-(defun rq-clear (key &optional (rs *current-rs*))
+(defun rq-clear (key &optional (rs brac::*current-rs*))
   (remhash (name-to-keyword key) (datastore rs)))
 
-(defun rq-data (key &optional (rs *current-rs*))
+(defun rq-data (key &optional (rs brac::*current-rs*))
   (gethash (name-to-keyword key) (datastore rs)))
 
-;;(defun (setf rq-data) (key value &optional (rs *current-rs*))
+;;(defun (setf rq-data) (key value &optional (rs brac::*current-rs*))
 ;;(setf (gethash (name-to-keyword key) (datastore rs)) value))
 
-(defun rq-data-clear (key &optional (rs *current-rs*))
+(defun rq-data-clear (key &optional (rs brac::*current-rs*))
   (remhash (name-to-keyword key) (datastore rs)))
 
-(defun res-hdr (key &optional (rs *current-rs*))
+(defun res-hdr (key &optional (rs brac::*current-rs*))
   (princ (format-request rs))
   (gethash (name-to-downcase-string key) (response-headers rs)))
 
