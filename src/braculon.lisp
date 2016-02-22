@@ -78,7 +78,11 @@
             :initform (make-hash-table :test 'equal)
             :documentation "")
    (starting-chain :accessor starting-chain ;;TODO: custom setter
-                   :initform "init"
+                   :initform "brac-init"
+                   :documentation "")
+   (max-chain-hops :accessor max-chain-hops
+                   :initform 200
+                   :type fixnum
                    :documentation "")
    (view-compilers :reader view-compilers
 		   :initform (make-hash-table :test 'equal)
@@ -112,16 +116,19 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 		 :request (hash-original-request clack-env)))
 
 ;;TODO: documentation for RESPONSE-CONTENT types.
-(defun to-clack-response (env)
-  (let ((content (response-content env)))
+(defun to-clack-response (rs)
+  (let ((content (response-content rs)))
     (if (functionp content)
-	(lack.component:call content (original-request env))
+	(lack.component:call content (original-request rs))
 	(list
-	 (response-status-code env)
-	 (alexandria:hash-table-plist (response-headers env))
+	 (response-status-code rs)
+	 (alexandria:hash-table-plist (response-headers rs))
 	 (if (stringp content)
 	     (list content)
 	     content)))))
+(defun clack-drop-request ()
+  ;;TODO: make clack close connection without returning anything
+  (error "Dropping requests not implemented yet, need to figure out Clack support for that."))
 
 (defmethod lack.component:to-app ((state brac-appstate))
   "This method is called by Clack to get a callback function that will be used for each incoming HTTP request to your app."
@@ -131,12 +138,11 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (process-request
      (wrap-request clack-env state))))
 
-(defgeneric process-request (env)
-  (:method ((env brac-reqstate))
-    (chain-route-request env)
-    (call-controller env)
-    (render env)
-    (to-clack-response env))
+(defgeneric process-request (rs)
+  (:method ((rs brac-reqstate))
+    (if (chain-pass rs)
+        (to-clack-response rs)
+        (clack-drop-request)))
   (:documentation ""))
 
 ;; TODO macroexpand writers that call registered hooks
@@ -161,67 +167,28 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
     (values config-form config-path)))
 
 (defun fill-slots-with-config-file-settings (config-form config-path given-root-path appstate)
-  (with-slots (name root-path config-file routing-chain routers-path
-               controllers-path views-path view-compilers-path
-               extensions reader-package verbose) appstate
+  (with-slots (name port root-path config-file reader-package verbose) appstate
     ;; TODO: thoroughly check user inputs from config file
-    (let ((r-path (uiop:merge-pathnames*
-		   (getf config-form :routers-path #p"routers/") given-root-path))
-	  (c-path (uiop:merge-pathnames*
-		   (getf config-form :controllers-path #p"controllers/") given-root-path))
-	  (v-path (uiop:merge-pathnames*
-		   (getf config-form :views-path #p"views/") given-root-path))
-	  (vc-path (uiop:merge-pathnames*
-		    (getf config-form :view-compilers-path #p"viewcc/") given-root-path)))
-      (macrolet ((test-paths (symlist)
-		   (let (testcode)
-		     ;; repeat testing code snippet for all paths.
-		     (dolist (x-path symlist)
-		       (let ((subpath (gensym)))
-			 (push `(let ((,subpath (uiop:subpathp ,x-path given-root-path)))
-				  (unless (and (pathname-directory ,subpath)
-					       (ensure-directories-exist ,x-path :verbose t))
-				    (error +conf-dirs-subpaths+)))
-			       testcode)))
-		     (push 'progn testcode))))
-	(test-paths
-	 (r-path c-path v-path vc-path)))
-      (setf
-       name (let ((raw-name (getf config-form :name)))
-	      (if (symbolp raw-name)
-		  (string-downcase (symbol-name raw-name))
-		  (format nil "~A" raw-name)))
-       root-path given-root-path
-       config-file config-path
-       routing-chain (let ((rc (getf config-form :routing-chain)))
-		       (if (consp rc)
-			   (if (and (symbolp (car rc))
-				    (string= "QUOTE"
-					     (symbol-name (car rc))))
-			       (cadr rc)
-			       rc)
-			   (error "Routing chain not a list or empty.")))
-       routers-path r-path
-       controllers-path c-path
-       views-path v-path
-       view-compilers-path vc-path
-       extensions (getf config-form :extensions)
-       reader-package (getf config-form :reader-package)
-       verbose (getf config-form :verbose t)))))
+    (setf
+     name (name-to-downcase-string
+           (getf config-form :name))
+     port (getf config-form :port)
+     root-path given-root-path
+     config-file config-path
+     reader-package (getf config-form :reader-package)
+     verbose (getf config-form :verbose t))))
 
 ;; TODO finish this
-(defmethod initialize-instance :after ((state brac-appstate) &key root-path)
+(defmethod initialize-instance :after ((appstate brac-appstate) &key root-path)
   (unless root-path
     (error +init-appstate-with-rootpath+))
   (let (config-form config-path)
     (multiple-value-setq (config-form config-path)
       (load-config-file-settings root-path))
-    (fill-slots-with-config-file-settings config-form config-path root-path state)
-    (load-builtin-routers state)
-    (load-builtin-controllers state)
-    (load-router-files state)
-    (load-controller-files state)
-    (load-view-files state)
+    (fill-slots-with-config-file-settings config-form config-path root-path appstate)
+    (load-builtin-actions appstate)
+    (load-builtin-conditions appstate)
+    (load-builtin-chains appstate)
     ;;TODO: check views for circular dependencies.
     ))
 
@@ -281,9 +248,9 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
 
 @export
 (defun stop (&key (app *appstate*))
-  (let ((state (find-app app)))
-    (when state
-      (with-slots (clack-handler launch-time is-running-p name) state
+  (let ((appstate (find-app app)))
+    (when appstate
+      (with-slots (clack-handler launch-time is-running-p name) appstate
 	(when clack-handler
 	  (clack:stop clack-handler)
 	  (setf clack-handler nil)
@@ -317,13 +284,13 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
 
 @export
 (defun reload-app (app)
-  (let* ((state (find-app app))
-	 (was-running (is-running-p state)))
-    (unload-app state)
-    (let ((new-state (load-app (root-path state))))
+  (let* ((appstate (find-app app))
+	 (was-running (is-running-p appstate)))
+    (unload-app appstate)
+    (let ((new-appstate (load-app (root-path appstate))))
       (when was-running
-	(start :app new-state))
-      new-state)))
+	(start :app new-appstate))
+      new-appstate)))
 
 (defmacro list-those-apps (applist)
   `(if (not print)
@@ -355,8 +322,8 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
   (list-those-apps *running-apps*))
 
 @export
-(defgeneric state-report (state)
-  (:method ((state brac-appstate))
+(defgeneric state-report (appstate)
+  (:method ((appstate brac-appstate))
     ;;TODO
     nil))
 

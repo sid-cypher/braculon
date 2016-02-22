@@ -30,7 +30,9 @@
   (:method ((appstate brac-appstate) action-name)
     ""
     (declare (type (or string symbol) action-name))
-    (gethash (name-to-downcase-string action-name) (actions appstate)))
+    ;; TODO: substitute with "action-not-found" action, log error.
+    (or (gethash (name-to-downcase-string action-name) (actions appstate))
+        (error "action ~A not found" action-name)))
   (:documentation ""))
 
 ;; TODO hooks, maybe log, no-overwrite option
@@ -92,37 +94,72 @@
                              (drop-now ()
                                (setf *action-finish* :drop)
                                (return-from ,action-block-name)))
+                        (declare (ignorable #'send-now #'pass-now #'jump-now
+                                            #'skip-now #'drop-now #'finish))
                         ,@body)
-                      (values ,reqstate-symbol *action-finish* *jump-chain*))))
+                      (values *action-finish* *jump-chain*))))
       :source-file (load-time-value
                     (or #.*compile-file-pathname* *load-pathname*)))))
 
-;; TODO return new rs only.
 (defgeneric load-builtin-actions (appstate)
   (:method ((appstate brac-appstate))
-    (defaction test rs appstate ()
+    (defaction nop rs appstate ()
+      nil)
+
+    (defaction send-test rs appstate ()
       ;;A tiny built-in action for testing purposes.
-      (setf (status-code rs) 200)
+      (finish :send)
+      (setf (response-status-code rs) 200)
       (setf (res-hdr :content-type) "text/plain; charset=UTF-8")
       (setf (response-content rs)
-	    (format nil "Test action reporting.~%appstate: ~W~%rs: ~W~%~A~%"
+	    (format nil "Test action reporting.~%appstate: ~W~%reqstate: ~W~%~A~%"
 		    appstate rs (format-request rs))))
 
-    (defaction hello rs appstate ()
+    (defaction send-hello rs appstate ()
       ;;Outputs a short greetings page.
-      (setf (status-code rs) 200)
+      (finish :send)
+      (setf (response-status-code rs) 200)
       (setf (res-hdr :content-type) "text/html; charset=UTF-8")
       (setf (response-content rs)
 	    (list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 		    (:html (:head (:title "braculon:hello"))
 			   (:body (:p "Hello! Things seem to work here.")))))))
 
-    (defaction file rs appstate (pathname)
+    (defaction send-404 rs appstate ()
+      ;;Outputs a short greetings page.
+      (finish :send)
+      (setf (response-status-code rs) 400)
+      (setf (res-hdr :content-type) "text/html; charset=UTF-8")
+      (setf (response-content rs)
+	    (list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
+		    (:html (:head (:title "404 Not Found"))
+			   (:body (:h2 "404 Not Found")
+                                  (:p "Unknown URL.")))))))
+
+    (defaction send-file rs appstate (pathname)
+      (finish :send)
       (setf (response-content rs)
             (lack.app.file:make-app
-             :file (getf (routing-data rs) :filename)
+             :file (getf (rq-data rs) :filename)
              :root (or pathname
                        (uiop:merge-pathnames* #p"static/" ;;TODO no magic
                                               (root-path appstate))))))
+
+    (defaction drop rs appstate ()
+      (finish :drop))
+
     t)
   (:documentation ""))
+
+(defun perform (rs action-spec)
+  (etypecase action-spec
+    (string
+     (funcall (callable (get-action (appstate rs) action-spec))
+              rs))
+    (symbol
+     (funcall (callable (get-action (appstate rs) action-spec))
+              rs))
+    (cons
+     (apply (callable (get-action (appstate rs) (first action-spec)))
+            rs
+            (rest action-spec)))))

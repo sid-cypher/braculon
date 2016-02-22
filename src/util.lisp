@@ -100,6 +100,8 @@
 (defun read-first-form-file (filepath &optional package)
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
+    (unless truepath
+      (error "Tried reading ~W, but it doesn't exist" filepath))
     ;;TODO push a message through event logging system, log errors
     (uiop:with-safe-io-syntax (:package (or package :brac-conf))
       (with-open-file (stream truepath)

@@ -54,7 +54,7 @@
 	   (type list lambda-list))
   `(add-condition ,appstate
                   (make-instance 'brac-condition
-                                 :name ',(name-to-downcase-string name)
+                                 :name ,(name-to-downcase-string name)
                                  :callable (lambda ,(cons reqstate-symbol lambda-list)
                                              (let ((brac::*current-rs* ,reqstate-symbol))
                                                ,@body))
@@ -63,21 +63,12 @@
 (defgeneric load-builtin-conditions (appstate)
   (:method ((appstate brac-appstate))
     ;;TODO with regex option
-    (defcondition path reqstate appstate (path ctrl-name &key (trailing-slash-option t))
-      (declare (type string path)
-               (type symbol ctrl-name))
-      (when (if trailing-slash-option
-		(string-and-slash= path (gethash :path-info (request reqstate)))
-		(string= path (gethash :path-info (request reqstate))))
-	(pack-routing-data reqstate
-                           (get-condition appstate 'braculon::fixed)
-                           (or (get-controller appstate ctrl-name)
-                               (error "No controller named ~A was found" ctrl-name))
-                           nil)))
+    (defcondition path reqstate appstate (path &key (trailing-slash-option t))
+      (declare (type string path))
+      (if trailing-slash-option
+          (string-and-slash= path (gethash :path-info (request reqstate)))
+          (string= path (gethash :path-info (request reqstate)))))
 
-    (defcondition test reqstate appstate ()
-      (format t "Test condition reporting.~%appstate: ~W~%reqstate: ~W~%" appstate reqstate)
-      reqstate)
     ;; ===old===
     #+nil(destructuring-bind (&key folder url-prefix data) options
 	   (unless (stringp url-prefix)
@@ -104,8 +95,21 @@
 	       "file-contents")))
 
     #+nil(defcondition braculon::redirect (reqstate) appstate
-           nil)
+             nil)
     #+nil(defcondition braculon::masquerade (reqstate) appstate
-           nil)
+             nil)
     t)
   (:documentation ""))
+
+(defun condition-check (rs condition-spec)
+  (etypecase condition-spec
+    (string
+     (funcall (callable (get-condition (appstate rs) condition-spec))
+              rs))
+    (symbol
+     (funcall (callable (get-condition (appstate rs) condition-spec))
+              rs))
+    (cons
+     (apply (callable (get-condition (appstate rs) (first condition-spec)))
+            rs
+            (last condition-spec)))))

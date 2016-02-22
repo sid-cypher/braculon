@@ -4,13 +4,10 @@
 
 @export-class
 (defclass brac-view-compiler ()
-  ((appstate :reader appstate
-	     :initarg :parent
-	     :initform (error "View compiler object needs a parent appstate.")
-	     :documentation "")
-   (name :reader name
+  ((name :reader name
 	 :initarg :name
-	 :initform (error "View compiler object needs a name symbol.")
+	 :initform (error "View compiler object needs a name.")
+         :type string
 	 :documentation "")
    (callable :reader callable
 	     :initarg :callable

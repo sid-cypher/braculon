@@ -14,6 +14,9 @@
    (request :accessor request
 	    :initarg :request
             :type hash-table)
+   (chain-hops :accessor chain-hops
+               :initform 0
+               :type fixnum)
    (response-status-code :accessor response-status-code
 			 :initarg :status-code
 			 :initform 200
@@ -26,8 +29,7 @@
 
 (defmethod print-object ((rs brac-reqstate) stream)
   (print-unreadable-object (rs stream :type t)
-    (with-slots (router controller root-view) rs
-      (format stream "reqstate:~A" (request rs)))))
+    (format stream "status: ~A, hops: ~A" (response-status-code rs) (chain-hops rs))))
 
 (defvar *current-rs* nil)
 
@@ -35,7 +37,7 @@
   (gethash (name-to-keyword key) (datastore rs)))
 
 ;;TODO: check if this is needed
-(defun (setf rq) (key value &optional (rs brac::*current-rs*))
+(defun (setf rq) (value key &optional (rs brac::*current-rs*))
   (setf (gethash (name-to-keyword key) (datastore rs)) value))
 
 (defun rq-clear (key &optional (rs brac::*current-rs*))
@@ -51,8 +53,10 @@
   (remhash (name-to-keyword key) (datastore rs)))
 
 (defun res-hdr (key &optional (rs brac::*current-rs*))
-  (princ (format-request rs))
   (gethash (name-to-downcase-string key) (response-headers rs)))
+
+(defun (setf res-hdr) (value key &optional (rs brac::*current-rs*))
+  (setf (gethash (name-to-downcase-string key) (response-headers rs)) value))
 
 (defun format-request (rs &key (format-control "~A: ~W~%") no-headers)
   (with-output-to-string (stream)
