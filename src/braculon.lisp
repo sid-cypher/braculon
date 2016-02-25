@@ -265,7 +265,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
          (new-app (make-instance 'brac-app
                                  :name (name-to-downcase-string name)
                                  :port (or port 8500)
-                                 :app-package package-spec
+                                 :app-package package
                                  :root-path (asdf:system-source-directory package)
                                  :verbose verbose-app)))
     (push new-app *registered-apps*)

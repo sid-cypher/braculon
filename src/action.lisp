@@ -53,6 +53,12 @@
                ,app))
 
 @export
+(defun finish (act-fin-type &optional chain-spec)
+  (declare (type (member :send :pass :jump :skip :drop) act-fin-type)
+           (ignore act-fin-type chain-spec))
+  (error "The function FINISH should be used in action definition scope only."))
+
+@export
 (defmacro make-action (name rps-sym lambda-list &body body)
   (declare (type (or symbol string) name)
            (type symbol rps-sym)

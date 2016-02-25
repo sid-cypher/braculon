@@ -58,7 +58,7 @@
 
 @export
 (defmacro make-rule-condition (name rps-sym lambda-list &body body)
-  `(make-instance 'condition
+  `(make-instance 'rule-condition
                   :name ,(name-to-downcase-string name)
                   :callable (lambda ,(cons rps-sym lambda-list)
                               (let ((brac::*current-rs* ,rps-sym))

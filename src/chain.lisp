@@ -12,6 +12,10 @@
    (rules :accessor rules
           :initarg :rules
           :documentation "")
+   (chain-length :accessor chain-length
+                 :initform 0
+                 :initarg :length
+                 :type number)
    (final-action :accessor final-action
                  :initarg :final-action
                  :type action
@@ -100,11 +104,13 @@
 
 @export
 (defmacro make-chain (name final-action &body body)
-  `(make-instance 'chain
-                  :name ,(name-to-downcase-string name)
-                  :final-action ,(name-to-downcase-string final-action)
-                  :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*))
-                  :rules ',body))
+  `(let ((rules ',body))
+     (make-instance 'chain
+                    :name ,(name-to-downcase-string name)
+                    :final-action ,(name-to-downcase-string final-action)
+                    :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*))
+                    :rules rules
+                    :length (length rules))))
 
 (defgeneric load-builtin-chains (app)
   (:method ((app brac-app))
@@ -115,4 +121,23 @@
     t)
   (:documentation ""))
 
-;;(defun list-chains ())
+@export
+(defun list-chains (&optional app)
+  (alexandria:hash-table-keys (chains (find-app app))))
+
+@export
+(defun chain-flush (&optional chain-name app)
+  (let ((chain (get-chain (or chain-name
+                              (starting-chain (find-app app)))
+                          app)))
+    (setf (rules chain) nil)
+    (setf (chain-length chain) 0)))
+
+@export
+(defun chain-append-rule (rule &optional chain-name app)
+  (let ((chain (get-chain (or chain-name
+                              (starting-chain (find-app app)))
+                          app)))
+    (setf (rules chain) (append (rules chain)
+                                (list rule)))
+    (incf (chain-length chain))))
