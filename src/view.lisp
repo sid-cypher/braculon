@@ -3,12 +3,8 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-view ()
-  ((appstate :reader appstate
-	     :initarg :parent
-	     :initform (error "View object needs a parent appstate.")
-	     :documentation "")
-   (name :reader name
+(defclass view ()
+  ((name :reader name
 	 :initarg :name
 	 :initform (error "View object needs a name.")
          :type string
@@ -34,46 +30,37 @@
 	      :initform (local-time:now)
 	      :documentation "")))
 
-(defmethod print-object ((view brac-view) stream)
+(defmethod print-object ((view view) stream)
   (print-unreadable-object (view stream :type t)
     (format stream "~A" (name view))))
 
-(defgeneric get-view (appstate view-name)
-  (:method ((appstate brac-appstate) view-name)
-    ""
-    (declare (type (or string symbol) view-name))
-    (gethash (name-to-downcase-string view-name) (views appstate)))
-  (:documentation ""))
+@export
+(defun get-view (view-name &optional app)
+  (declare (type (or string symbol) view-name))
+  (gethash (name-to-downcase-string view-name) (views (find-app app))))
 
-;; TODO hooks, maybe log, no-overwrite option
-(defgeneric add-view (appstate view)
-  (:method ((appstate brac-appstate) (view brac-view))
-    ""
-    (setf (gethash (name view) (views appstate)) view))
-  (:documentation ""))
+(defun add-view (view &optional app)
+  (declare (type view view))
+  (setf (gethash (name view) (views (find-app app))) view))
 
-;;TODO add hooks
-(defgeneric del-view (appstate view-name)
-  (:method ((appstate brac-appstate) view-name)
-    ""
-    (declare (type (or symbol string) view-name))
-    (with-slots (views) appstate
-      (remhash (name-to-downcase-string view-name) views)))
-  (:documentation ""))
+@export
+(defun del-view (view-name &optional app)
+  (declare (type (or string symbol) view-name))
+  (remhash (name-to-downcase-string view-name) (views (find-app app))))
 
 ;;TODO walk view dependencies, get full length, add keys
 ;;IMPORTANT: check if view was already visited, avoid circular deps.
 (defun make-field-collection (view)
-  (let ((state (appstate view))
+  (let ((app (app view))
 	(queue (make-instance 'jpl-queues:unbounded-fifo-queue))
 	dep-fields-list
 	all-dep-fields
 	field-collection)
     (labels
 	((bfs-walk (v) ;;make iterative maybe
-	   (declare (type brac-view view))
+	   (declare (type view view))
 	   (dolist (dv (dependencies v))
-	     (jpl-queues:enqueue (get-view state dv) queue))
+	     (jpl-queues:enqueue (get-view dv app) queue))
 	   (push (fields v) dep-fields-list)
 	   (let ((next (jpl-queues:dequeue queue)))
 	     (if next
@@ -103,7 +90,7 @@
 	   (type keyword indicator))
   (setf (gethash indicator collection) value))
 
-(defmacro with-view-fields (fields env &body body)
+(defmacro with-view-fields (fields rps &body body)
   ""
   (let ((fcol-sym (gensym "field-collection"))
 	field-bindings)
@@ -111,33 +98,33 @@
       (push `(,f (field ,fcol-sym
 			(find-symbol (symbol-name ,f) :keyword)))
 	    field-bindings))
-    `(let ((,fcol-sym (view-fields ,env)))
+    `(let ((,fcol-sym (view-fields ,rps)))
        (let ,field-bindings
 	 ,@body))))
 
 @export
-(defgeneric pack-rendering-data (env view &optional field-collection)
-  (:method ((env brac-reqstate) view-name &optional field-collection)
+(defgeneric pack-rendering-data (rps view &optional field-collection)
+  (:method ((rps request-processing-state) view-name &optional field-collection)
     (declare (type symbol view-name))
-    (let ((view (get-view (appstate env) view-name)))
+    (let ((view (get-view view-name (app rps))))
       (if view
-	  (pack-rendering-data env view field-collection)
+	  (pack-rendering-data rps view field-collection)
 	  (error "view-not-found"))))
-  (:method ((env brac-reqstate) (view brac-view) &optional field-collection)
-    (setf (root-view env) view)
-    (setf (view-fields env)
+  (:method ((rps request-processing-state) (view view) &optional field-collection)
+    (setf (root-view rps) view)
+    (setf (view-fields rps)
 	  (or field-collection
 	      (make-field-collection view))))
   (:documentation ""))
 
 @export
-(defun render (env)
+(defun render (rps)
   ""
-  (let ((view (root-view env)))
+  (let ((view (root-view rps)))
     (when view
-      (let ((state (appstate env))
+      (let ((app (app rps))
 	    result)
-	(when (verbosep state)
+	(when (verbosep app)
 	  (format t "Rendering view: ~W~%" view))
 	(labels
 	    ((dep-call-results (v)
@@ -146,27 +133,27 @@
 		     d-values)
 		 (setf d-values
 		       (mapcar (lambda (d)
-				 (dep-call-results (get-view state d)))
+				 (dep-call-results (get-view d app)))
 			       deps))
-		 (apply ren-fun env d-values))))
+		 (apply ren-fun rps d-values))))
 	  (setf result (dep-call-results view)))
-	(setf (response-content env) result)))))
+	(setf (response-content rps) result)))))
 
-;;TODO faster typechecking, better env data structure
+;;TODO faster typechecking, better rps data structure
 (defun valid-response-p (clack-response-form)
   (if (or (typep clack-response-form 'function)
-	    (and
-	     (consp clack-response-form)
-	     (integerp (first clack-response-form))
-	     (listp (second clack-response-form))
-	     (typep (third clack-response-form)
-		    '(or cons pathname (simple-array (unsigned-byte 8))))
-	     (if (consp (third clack-response-form))
-		 (stringp (first (third clack-response-form)))
-		 t)))
-	clack-response-form
-	nil))
+          (and
+           (consp clack-response-form)
+           (integerp (first clack-response-form))
+           (listp (second clack-response-form))
+           (typep (third clack-response-form)
+                  '(or cons pathname (simple-array (unsigned-byte 8))))
+           (if (consp (third clack-response-form))
+               (stringp (first (third clack-response-form)))
+               t)))
+      clack-response-form
+      nil))
 
 ;;TODO
-(defun load-builtin-views (state)
+(defun load-builtin-views (app)
   nil)

@@ -3,7 +3,7 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-chain ()
+(defclass chain ()
   ((name :reader name
 	 :initarg :name
 	 :initform (error "Chain object needs a name.")
@@ -14,7 +14,7 @@
           :documentation "")
    (final-action :accessor final-action
                  :initarg :final-action
-                 :type brac-action
+                 :type action
                  :documentation "")
    (source-file :reader source-file
 		:initarg :source-file
@@ -23,41 +23,34 @@
 	      :initform (local-time:now)
 	      :documentation "")))
 
-(defmethod print-object ((chain brac-chain) stream)
+(defmethod print-object ((chain chain) stream)
   (print-unreadable-object (chain stream :type t)
     (format stream "~A" (name chain))))
 
-;; TODO log failures
+;; TODO hooks, log failures and warnings, no-overwrite option
 @export
-(defgeneric get-chain (appstate chain-name)
-  (:method ((appstate brac-appstate) chain-name)
-    ""
-    (declare (type (or string symbol) chain-name))
-    (gethash (name-to-downcase-string chain-name) (chains appstate)))
-  (:documentation ""))
+(defun get-chain (chain-name &optional app)
+  (declare (type (or string symbol) chain-name))
+  (gethash (name-to-downcase-string chain-name) (chains (find-app app))))
 
-;; TODO hooks, maybe log, no-overwrite option
-(defgeneric add-chain (appstate chain)
-  (:method ((appstate brac-appstate) (chain brac-chain))
-    ""
-    (setf (gethash (name chain) (chains appstate)) chain))
-  (:documentation ""))
+(defun add-chain (chain &optional app)
+  (declare (type chain chain))
+  (setf (gethash (name chain) (chains (find-app app))) chain))
 
-;;TODO add hooks
-(defgeneric del-chain (appstate chain-name)
-  (:method ((appstate brac-appstate) chain-name)
-    ""
-    (declare (type (or symbol string) chain-name))
-    (with-slots (chains) appstate
-      (remhash (name-to-downcase-string chain-name) chains)))
-  (:documentation ""))
+@export
+(defun del-chain (chain-name &optional app)
+  (declare (type (or string symbol) chain-name))
+  (remhash (name-to-downcase-string chain-name) (chains (find-app app))))
 
 (defun chain-pass (rs &optional chain-name)
+  ;; TODO: store at least url path, maybe Rete alg eventually?
   (unless chain-name
-    (setf chain-name (starting-chain (appstate rs))))
-  (let ((max-hops (max-chain-hops (appstate rs)))
-        (chain (get-chain (appstate rs) chain-name))
+    (setf chain-name (starting-chain (app rs))))
+  (let ((max-hops (max-chain-hops (app rs)))
+        (chain (get-chain (app rs) chain-name))
         skip-rule permission-to-send)
+    (unless chain
+      (error "Chain ~W not found." chain-name))
     (block chainloop
       (dolist (rule (rules chain))
         ;;(format t "---~%rule:~W~%car: ~W~%cdr: ~W~%---~%" rule (car rule) (cdr rule))
@@ -90,21 +83,36 @@
           (:drop (setf permission-to-send nil)))))
     permission-to-send))
 
-(defmacro defchain (name appstate final-action &body body)
+@export
+(defmacro defchain (name final-action &body body)
   (declare (type (or symbol string) name final-action))
   ;;TODO: walk body of rules and ensure it is well-defined
-  `(add-chain ,appstate
-              (make-instance 'brac-chain
-                             :name ,(name-to-downcase-string name)
-                             :final-action ,(name-to-downcase-string final-action)
-                             :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*))
-                             :rules ',body)))
+  `(add-chain (make-chain ,name ,final-action
+                          ,@body)))
 
-(defgeneric load-builtin-chains (appstate)
-  (:method ((appstate brac-appstate))
-    (defchain brac-init appstate send-404
+@export
+(defmacro defchain* (name app final-action &body body)
+  (declare (type (or symbol string) name final-action))
+  ;;TODO: walk body of rules and ensure it is well-defined
+  `(add-chain (make-chain ,name ,final-action
+                ,@body)
+              ,app))
+
+@export
+(defmacro make-chain (name final-action &body body)
+  `(make-instance 'chain
+                  :name ,(name-to-downcase-string name)
+                  :final-action ,(name-to-downcase-string final-action)
+                  :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*))
+                  :rules ',body))
+
+(defgeneric load-builtin-chains (app)
+  (:method ((app brac-app))
+    (defchain* init app send-404
       ((path "/") send-hello)
       ((path "/drop") drop)
       ((path "/test") send-test))
     t)
   (:documentation ""))
+
+;;(defun list-chains ())

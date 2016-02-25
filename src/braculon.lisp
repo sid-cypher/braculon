@@ -36,29 +36,26 @@
   "Connecting app (~A) to server via Clack.~%" :test #'string=)
 (define-constant +conf-dirs-subpaths+
    "One or more paths in app-config do not exist or are not subpaths of root." :test #'string=)
-(define-constant +init-appstate-with-rootpath+
-   "Please specify the path to your app dir with the :ROOT-PATH key." :test #'string=)
+(define-constant +init-app-with-rootpath+
+  "Please specify the path to your app dir with the :ROOT-PATH key." :test #'string=)
 
-(defvar *loaded-apps* '() "List of web apps that have been already loaded.")
+(defvar *registered-apps* '() "List of web apps that have been already registered.")
 (defvar *running-apps* '() "List of web apps that are running.")
 
-@export
-(defvar *appstate* nil "Default argument in macros and functions")
-@export
-(defvar *reqstate* nil "Default argument in macros and functions")
-
-;; TODO: move inside brac-appstate maybe?
-(defvar *hooks-running* '() "used to avoid accidental endless recursions when handling state changes")
+;; TODO: move inside brac-app maybe?
+;;(defvar *hooks-running* '() "used to avoid accidental endless recursions when handling app changes")
 
 @export-class
-(defclass brac-appstate ()
+(defclass brac-app ()
   ((name :reader name
 	 :type 'string
-	 :initform "[unnamed]"
+	 :initarg :name
+	 :initform (error "An app needs a name.")
 	 :documentation "")
    (port :reader port
 	 :type fixnum
-	 :initform 5000
+	 :initform (error "A web app needs a port to listen on.")
+	 :initarg :port
 	 :documentation "")
    (is-running-p :reader is-running-p
 		 :type 'boolean
@@ -66,8 +63,6 @@
 		 :documentation "")
    (root-path :reader root-path
 	      :documentation "")
-   (config-file :reader config-file
-		:documentation "")
    (chains :reader chains
            :initform (make-hash-table :test 'equal)
            :documentation "")
@@ -78,7 +73,7 @@
             :initform (make-hash-table :test 'equal)
             :documentation "")
    (starting-chain :accessor starting-chain ;;TODO: custom setter
-                   :initform "brac-init"
+                   :initform "init"
                    :documentation "")
    (max-chain-hops :accessor max-chain-hops
                    :initform 200
@@ -93,36 +88,39 @@
    (verbose :type boolean
 	    :reader verbosep
 	    :initform t
+	    :initarg :verbose
 	    :documentation "")
-   (reader-package :accessor reader-package ;;TODO: improve this
-                   :initform :braculon)
+   (app-package :accessor app-package ;;TODO: improve this
+                :type keyword
+                :initarg :app-package
+                :initform :braculon)
    (launch-time :reader launch-time
 		:documentation "")
    (clack-handler :initform nil))
   (:documentation "This object represents a web app and holds its settings.
 You can pass an instance of this object to clack:clackup, as the necessary call method has already been defined for it."))
 
-(defmethod print-object ((state brac-appstate) stream)
-  (print-unreadable-object (state stream :type t :identity t)
+(defmethod print-object ((app brac-app) stream)
+  (print-unreadable-object (app stream :type t :identity t)
     (format stream "\"~A\" ~A"
-	    (name state)
-	    (if (is-running-p state) "running"
+	    (name app)
+	    (if (is-running-p app) "running"
 		"stopped"))))
 
-(defun wrap-request (clack-env appstate)
-  (make-instance 'brac-reqstate
-		 :appstate appstate
+(defun wrap-request (clack-env app)
+  (make-instance 'request-processing-state
+		 :app app
 		 :original-request clack-env
 		 :request (hash-original-request clack-env)))
 
 ;;TODO: documentation for RESPONSE-CONTENT types.
-(defun to-clack-response (rs)
-  (let ((content (response-content rs)))
+(defun to-clack-response (rps)
+  (let ((content (response-content rps)))
     (if (functionp content)
-	(lack.component:call content (original-request rs))
+	(lack.component:call content (original-request rps))
 	(list
-	 (response-status-code rs)
-	 (alexandria:hash-table-plist (response-headers rs))
+	 (response-status-code rps)
+	 (alexandria:hash-table-plist (response-headers rps))
 	 (if (stringp content)
 	     (list content)
 	     content)))))
@@ -130,18 +128,18 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   ;;TODO: make clack close connection without returning anything
   (error "Dropping requests not implemented yet, need to figure out Clack support for that."))
 
-(defmethod lack.component:to-app ((state brac-appstate))
+(defmethod lack.component:to-app ((app brac-app))
   "This method is called by Clack to get a callback function that will be used for each incoming HTTP request to your app."
-  (when (verbosep state)
-    (format t +connecting-clack+ (name state)))
+  (when (verbosep app)
+    (format t +connecting-clack+ (name app)))
   (lambda (clack-env)
     (process-request
-     (wrap-request clack-env state))))
+     (wrap-request clack-env app))))
 
-(defgeneric process-request (rs)
-  (:method ((rs brac-reqstate))
-    (if (chain-pass rs)
-        (to-clack-response rs)
+(defgeneric process-request (rps)
+  (:method ((rps request-processing-state))
+    (if (chain-pass rps)
+        (to-clack-response rps)
         (clack-drop-request)))
   (:documentation ""))
 
@@ -150,47 +148,15 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   (declare (type string value))
   (setf (slot-value object 'name) value))
 
-(defun load-config-file-settings (root-path)
-  (declare (type pathname root-path))
+;; TODO finish this
+(defmethod initialize-instance :after ((app brac-app) &key root-path)
   (unless (uiop:directory-exists-p root-path)
     (error +root-path-doesnt-exist+ root-path))
-  (let (config-form config-path)
-    (setf config-path (uiop:merge-pathnames* #p"settings.conf.lisp" root-path))
-    (setf config-form (read-first-form-file config-path))
-    ;; TODO better read-first-form-file error handling
-    (unless config-form
-      (error "~A~%" +form-read-error+))
-    (unless (string= (symbol-name (first config-form))
-		     (string-upcase "app-config"))
-      (error +config-list-wrong-head+))
-    (setf config-form (rest config-form))
-    (values config-form config-path)))
-
-(defun fill-slots-with-config-file-settings (config-form config-path given-root-path appstate)
-  (with-slots (name port root-path config-file reader-package verbose) appstate
-    ;; TODO: thoroughly check user inputs from config file
-    (setf
-     name (name-to-downcase-string
-           (getf config-form :name))
-     port (getf config-form :port)
-     root-path given-root-path
-     config-file config-path
-     reader-package (getf config-form :reader-package)
-     verbose (getf config-form :verbose t))))
-
-;; TODO finish this
-(defmethod initialize-instance :after ((appstate brac-appstate) &key root-path)
-  (unless root-path
-    (error +init-appstate-with-rootpath+))
-  (let (config-form config-path)
-    (multiple-value-setq (config-form config-path)
-      (load-config-file-settings root-path))
-    (fill-slots-with-config-file-settings config-form config-path root-path appstate)
-    (load-builtin-actions appstate)
-    (load-builtin-conditions appstate)
-    (load-builtin-chains appstate)
-    ;;TODO: check views for circular dependencies.
-    ))
+  (load-builtin-actions app)
+  (load-builtin-conditions app)
+  (load-builtin-chains app)
+  ;;TODO: check views for circular dependencies.
+  )
 
 ;; TODO summoning skeletons, error handling
 @export
@@ -199,37 +165,48 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
   path-to-app)
 
 @export
-(defun find-app (name)
-  (declare (type (or string symbol brac-appstate) name))
-  (if (typep name 'brac-appstate) name
-      (find name *loaded-apps*
-            :test (lambda (namearg an-app)
+(defun find-app (&optional spec)
+  "Returns the app object with a name SPEC.
+ When called with no arguments, finds an app with the same
+ name as current package or the first app registered with
+ that package's designator keyword in APP-PACKAGE slot."
+  (declare (type (or string symbol brac-app null) spec))
+  (if (typep spec 'brac-app)
+      spec
+      (let ((npspec (or spec (package-name *package*))))
+        (or
+         (find-if (lambda (an-app)
                     (string= (name an-app)
-                             (name-to-downcase-string namearg))))))
+                             (name-to-downcase-string npspec)))
+                  *registered-apps*)
+         (find-if (lambda (an-app)
+                    (eq (app-package an-app)
+                        (name-to-keyword npspec)))
+                  *registered-apps*)))))
 
 ;;TODO: use local-time
 @export
-(defun start (&key (app *appstate*) (if-running :restart) (server :woo))
+(defun start (&key app (if-running :restart) (server :woo))
   "This function starts (or, if applicable, restarts) your application.
- It accepts an app object (returned by LOAD-APP) or its name (string or symbol)
- as an argument. Providing a name results in calling FIND-APP internally.
- Starting an app includes adding it to *RUNNING-APPS* list, marking it as running
- and making it begin accepting web requests.
+ You can provide the name of the app you are starting (string or symbol)
+ as a key or leave it out, in which case the last app registered from
+ the current package will be started.
+ Starting an app includes adding it to the list of running apps, marking it
+ as running and making it begin accepting web requests.
 
 Use :SERVER key to pick a backend HTTP server from those supported by Clack.
-With :PORT key you can specify which port the server should listen to.
 Key :IF-RUNNING takes one of following values:
 - :RESTART to restart the app if it was already running (default),
 - :SKIP to do nothing if the app was already running,
 - :ERROR to signal an error if, you guessed it, the app was running.
 Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
-  (declare (type (or brac-appstate string symbol) app)
+  (declare (type (or brac-app string symbol) app)
 	   (type (member :error :skip :restart) if-running)
 	   (type symbol server))
   (setf app (find-app app))
   (flet ((actually-start ()
 	   (let ((clack-result (clack:clackup app :server server :port (port app)
-						       :use-default-middlewares nil)))
+                                                  :use-default-middlewares nil)))
 	     (when clack-result
 	       (with-slots (clack-handler launch-time is-running-p) app
 		 (setf clack-handler clack-result)
@@ -247,74 +224,77 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
 	(actually-start))))
 
 @export
-(defun stop (&key (app *appstate*))
-  (let ((appstate (find-app app)))
-    (when appstate
-      (with-slots (clack-handler launch-time is-running-p name) appstate
-	(when clack-handler
-	  (clack:stop clack-handler)
-	  (setf clack-handler nil)
-	  (setf is-running-p nil)
-	  (setf *running-apps* (delete-if (lambda (an-app)
-					    (string= name (name an-app)))
-					  *running-apps*))
-	  t)))))
+(defun stop (&key app)
+  (let ((app (find-app app)))
+    (when app
+      (with-slots (clack-handler launch-time is-running-p name) app
+        (when clack-handler
+          (clack:stop clack-handler)
+          (setf clack-handler nil)
+          (setf is-running-p nil)
+          (setf *running-apps* (delete-if (lambda (an-app)
+                                            (string= name (name an-app)))
+                                          *running-apps*))
+          t)))))
 
 @export
-(defun unload-app (app)
-  (stop :app app)
-  (let ((appname (if (typep app 'brac-appstate)
-		     (name app)
-		     (name-to-downcase-string app))))
-    (setf *loaded-apps*
+(defun unregister-app (app-spec)
+  (stop :app app-spec)
+  (let ((appname (if (typep app-spec 'brac-app)
+		     (name app-spec)
+		     (name-to-downcase-string app-spec))))
+    (setf *registered-apps*
           (delete-if (lambda (an-app)
                        (string= (name an-app) appname))
-                     *loaded-apps*))))
+                     *registered-apps*))))
 
+;; TODO: a function to change the listener port of a running app.
 @export
-(defun load-app (path)
-  (let ((app (find path *loaded-apps*
-		   :test (lambda (pn an-app)
-			   (uiop:pathname-equal pn (root-path an-app))))))
+(defun register-new-app (name &key port (package-spec (package-name *package*)) overwrite (verbose-app t))
+  (declare (type (or string symbol) name package-spec)
+           (type fixnum port)
+           (type boolean overwrite verbose-app))
+  (let ((app (find name *registered-apps*
+                   :test (lambda (appname an-app)
+                           (string= appname (name an-app))))))
     (when app
-      (unload-app app)))
-  (let ((new-app (make-instance 'brac-appstate :root-path path)))
-    (push new-app *loaded-apps*)
+      (if overwrite
+          (unregister-app app)
+          (error "An app with the same name already exists.")))) ;;TODO l10n
+  (let* ((package (name-to-keyword package-spec))
+         (new-app (make-instance 'brac-app
+                                 :name (name-to-downcase-string name)
+                                 :port (or port 8500)
+                                 :app-package package-spec
+                                 :root-path (asdf:system-source-directory package)
+                                 :verbose verbose-app)))
+    (push new-app *registered-apps*)
     new-app))
 
-@export
-(defun reload-app (app)
-  (let* ((appstate (find-app app))
-	 (was-running (is-running-p appstate)))
-    (unload-app appstate)
-    (let ((new-appstate (load-app (root-path appstate))))
-      (when was-running
-	(start :app new-appstate))
-      new-appstate)))
-
 (defmacro list-those-apps (applist)
+  ;;internal macro, make it a function
   `(if (not print)
        (mapcar #'name ,applist)
        (loop for app in ,applist
-	  with name
-	  do (progn
-	       (setf name (name app))
-	       (if (and detailed
-			(is-running-p app))
-		   (multiple-value-bind (d m h s)
-		       (uptime-seconds-to-dhms (launch-time app))
-		     (format t (mcat "~A (uptime: ~[~*~:;~D days, ~]"
-				     "~[~*~:;~D hours, ~]"
-				     "~[~*~:;~D minutes, ~]"
-				     "~D seconds.)~%") name d d m m h h s))
-		   (format t "~A~%" name)))
-	  collect name into names
-	  return names)))
+             with name
+             do (progn
+                  (setf name (name app))
+                  (if (and detailed
+                           (is-running-p app))
+                      (multiple-value-bind (d m h s)
+                          (uptime-seconds-to-dhms (launch-time app))
+                        (format t (mcat "~A (uptime: ~[~*~:;~D days, ~]"
+                                    "~[~*~:;~D hours, ~]"
+                                    "~[~*~:;~D minutes, ~]"
+                                    "~D seconds.)~%") name d d m m h h s))
+                      (format t "~A~%" name)))
+             collect name into names
+             return names)))
 
 @export
-(defun list-loaded-apps (&key (print t) (detailed t))
-  "Returns and optionally prints a list of loaded web projects."
-  (list-those-apps *loaded-apps*))
+(defun list-registered-apps (&key (print t) (detailed t))
+  "Returns and optionally prints a list of registered web projects."
+  (list-those-apps *registered-apps*))
 
 @export
 (defun list-running-apps (&key (print t) (detailed t))
@@ -322,8 +302,8 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
   (list-those-apps *running-apps*))
 
 @export
-(defgeneric state-report (appstate)
-  (:method ((appstate brac-appstate))
+(defgeneric app-report (app)
+  (:method ((app brac-app))
     ;;TODO
     nil))
 

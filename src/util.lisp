@@ -103,7 +103,7 @@
     (unless truepath
       (error "Tried reading ~W, but it doesn't exist" filepath))
     ;;TODO push a message through event logging system, log errors
-    (uiop:with-safe-io-syntax (:package (or package :brac-conf))
+    (uiop:with-safe-io-syntax (:package (or package :brac))
       (with-open-file (stream truepath)
 	(read stream :eof-value nil)))))
 
@@ -111,7 +111,7 @@
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
     ;;TODO push a message through event logging system, log errors
-    (uiop:with-safe-io-syntax (:package (or package :brac-conf))
+    (uiop:with-safe-io-syntax (:package (or package :brac))
       (with-open-file (stream truepath)
 	(let ((first-form (ignore-errors (read stream))))
 	  (unless (ignore-errors (read stream))
@@ -121,7 +121,7 @@
   (declare (type pathname filepath))
   (let ((truepath (uiop:file-exists-p filepath)))
     (ignore-errors ;;TODO push a message through event logging system
-     (uiop:with-safe-io-syntax (:package (or package :brac-conf))
+     (uiop:with-safe-io-syntax (:package (or package :brac))
        (with-open-file (stream truepath)
          (handler-bind ((end-of-file (lambda (err)
                                        (declare (ignorable err))

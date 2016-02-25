@@ -3,7 +3,7 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-view-compiler ()
+(defclass view-compiler ()
   ((name :reader name
 	 :initarg :name
 	 :initform (error "View compiler object needs a name.")

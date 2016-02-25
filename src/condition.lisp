@@ -3,7 +3,7 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-condition ()
+(defclass rule-condition ()
   ((name :reader name
 	 :initarg :name
 	 :initform (error "Condition object needs a name.")
@@ -20,54 +20,59 @@
 	      :initform (local-time:now)
 	      :documentation "")))
 
-(defmethod print-object ((condition brac-condition) stream)
+(defmethod print-object ((condition rule-condition) stream)
   (print-unreadable-object (condition stream :type t)
     (format stream "~A" (name condition))))
 
+;; TODO hooks, log failures and warnings, no-overwrite option
 @export
-(defgeneric get-condition (appstate condition-name)
-  (:method ((appstate brac-appstate) condition-name)
-    ""
-    (declare (type (or string symbol) condition-name))
-    (gethash (name-to-downcase-string condition-name) (conditions appstate)))
-  (:documentation ""))
+(defun get-condition (condition-name &optional app)
+  (declare (type (or string symbol) condition-name))
+  (gethash (name-to-downcase-string condition-name) (conditions (find-app app))))
 
-;;TODO add hooks into condition slot writer
-(defgeneric add-condition (appstate condition)
-  (:method ((appstate brac-appstate) (condition brac-condition))
-    ""
-    (setf (gethash (name condition) (conditions appstate)) condition))
-  (:documentation ""))
+(defun add-condition (condition &optional app)
+  (declare (type condition rule-condition))
+  (setf (gethash (name condition) (conditions (find-app app))) condition))
 
-;;TODO add hooks
-(defgeneric del-condition (appstate condition-name)
-  (:method ((appstate brac-appstate) condition-name)
-    ""
-    (declare (type (or symbol string) condition-name))
-    (with-slots (conditions) appstate
-      (remhash (name-to-downcase-string condition-name) conditions)))
-  (:documentation ""))
+@export
+(defun del-condition (condition-name &optional app)
+  (declare (type (or string symbol) condition-name))
+  (remhash (name-to-downcase-string condition-name) (conditions (find-app app))))
 
-(defmacro defcondition (name reqstate-symbol appstate lambda-list &body body)
+@export
+(defmacro defcondition (name rps-sym lambda-list &body body)
   (declare (type (or symbol string) name)
-           (type symbol reqstate-symbol)
+           (type symbol rps-sym)
 	   (type list lambda-list))
-  `(add-condition ,appstate
-                  (make-instance 'brac-condition
-                                 :name ,(name-to-downcase-string name)
-                                 :callable (lambda ,(cons reqstate-symbol lambda-list)
-                                             (let ((brac::*current-rs* ,reqstate-symbol))
-                                               ,@body))
-                                 :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*)))))
+  `(add-condition (make-rule-condition ,name ,rps-sym ,lambda-list
+                    ,@body)))
 
-(defgeneric load-builtin-conditions (appstate)
-  (:method ((appstate brac-appstate))
+@export
+(defmacro defcondition* (name rps-sym app lambda-list &body body)
+  (declare (type (or symbol string) name)
+           (type symbol rps-sym)
+	   (type list lambda-list))
+  `(add-condition (make-rule-condition ,name ,rps-sym ,lambda-list
+                    ,@body)
+                  ,app))
+
+@export
+(defmacro make-rule-condition (name rps-sym lambda-list &body body)
+  `(make-instance 'condition
+                  :name ,(name-to-downcase-string name)
+                  :callable (lambda ,(cons rps-sym lambda-list)
+                              (let ((brac::*current-rs* ,rps-sym))
+                                ,@body))
+                  :source-file (load-time-value (or #.*compile-file-pathname* *load-pathname*))))
+
+(defgeneric load-builtin-conditions (app)
+  (:method ((app brac-app))
     ;;TODO with regex option
-    (defcondition path reqstate appstate (path &key (trailing-slash-option t))
+    (defcondition* path rqs app (path &key (trailing-slash-option t))
       (declare (type string path))
       (if trailing-slash-option
-          (string-and-slash= path (gethash :path-info (request reqstate)))
-          (string= path (gethash :path-info (request reqstate)))))
+          (string-and-slash= path (gethash :path-info (request rqs)))
+          (string= path (gethash :path-info (request rqs)))))
 
     ;; ===old===
     #+nil(destructuring-bind (&key folder url-prefix data) options
@@ -78,8 +83,8 @@
 	     (setf folder nil))
 	   (let ((static-files (uiop:directory-files
 				(if folder
-				    (merge-pathnames folder (static-content-path appstate))
-				    (static-content-path appstate))))
+				    (merge-pathnames folder (static-content-path app))
+				    (static-content-path app))))
 		 (prefix (or url-prefix "/"))
 		 matchp)
 	     (setf (condition-data req) nil)
@@ -94,22 +99,27 @@
 	     (when matchp
 	       "file-contents")))
 
-    #+nil(defcondition braculon::redirect (reqstate) appstate
-             nil)
-    #+nil(defcondition braculon::masquerade (reqstate) appstate
-             nil)
+    #+nil(defcondition braculon::redirect (rqs) app
+           nil)
+    #+nil(defcondition braculon::masquerade (rqs) app
+           nil)
     t)
   (:documentation ""))
 
 (defun condition-check (rs condition-spec)
-  (etypecase condition-spec
-    (string
-     (funcall (callable (get-condition (appstate rs) condition-spec))
-              rs))
-    (symbol
-     (funcall (callable (get-condition (appstate rs) condition-spec))
-              rs))
-    (cons
-     (apply (callable (get-condition (appstate rs) (first condition-spec)))
-            rs
-            (last condition-spec)))))
+  (flet ((call-if-found ()
+           (let ((cnd (get-condition (app rs) condition-spec)))
+             (if cnd
+                 (funcall (callable cnd) rs)
+                 (error "Condition ~W not found." condition-spec)))))
+    (etypecase condition-spec
+      (string
+       (call-if-found))
+      (symbol
+       (call-if-found))
+      (cons
+       (let ((cnd (get-condition (app rs) (first condition-spec)))
+             (args (last condition-spec)))
+         (if cnd
+             (apply (callable cnd) rs args)
+             (error "Condition ~W not found." (first condition-spec))))))))

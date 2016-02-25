@@ -3,9 +3,9 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-reqstate ()
-  ((appstate :reader appstate
-	     :initarg :appstate)
+(defclass request-processing-state ()
+  ((app :reader app
+        :initarg :app)
    (datastore :accessor datastore
               :initform (make-hash-table :test 'eq)
               :type hash-table)
@@ -27,7 +27,7 @@
    (response-content :accessor response-content
 		     :initarg :response)))
 
-(defmethod print-object ((rs brac-reqstate) stream)
+(defmethod print-object ((rs request-processing-state) stream)
   (print-unreadable-object (rs stream :type t)
     (format stream "status: ~A, hops: ~A" (response-status-code rs) (chain-hops rs))))
 

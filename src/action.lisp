@@ -3,7 +3,7 @@
 (annot:enable-annot-syntax)
 
 @export-class
-(defclass brac-action ()
+(defclass action ()
   ((name :reader name
 	 :initarg :name
 	 :initform (error "Action object needs a name.")
@@ -20,55 +20,49 @@
 	      :initform (local-time:now)
 	      :documentation "")))
 
-(defmethod print-object ((action brac-action) stream)
+(defmethod print-object ((action action) stream)
   (print-unreadable-object (action stream :type t)
     (format stream "~A" (name action))))
 
-;; TODO log failures
+;; TODO hooks, log failures and warnings, no-overwrite option
 @export
-(defgeneric get-action (appstate action-name)
-  (:method ((appstate brac-appstate) action-name)
-    ""
-    (declare (type (or string symbol) action-name))
-    ;; TODO: substitute with "action-not-found" action, log error.
-    (or (gethash (name-to-downcase-string action-name) (actions appstate))
-        (error "action ~A not found" action-name)))
-  (:documentation ""))
+(defun get-action (action-name &optional app)
+  (declare (type (or string symbol) action-name))
+  (gethash (name-to-downcase-string action-name) (actions (find-app app))))
 
-;; TODO hooks, maybe log, no-overwrite option
-(defgeneric add-action (appstate action)
-  (:method ((appstate brac-appstate) (action brac-action))
-    ""
-    (setf (gethash (name action) (actions appstate)) action))
-  (:documentation ""))
+(defun add-action (action &optional app)
+  (declare (type action action))
+  (setf (gethash (name action) (actions (find-app app))) action))
 
-;;TODO add hooks
-(defgeneric del-action (appstate action-name)
-  (:method ((appstate brac-appstate) action-name)
-    ""
-    (declare (type (or symbol string) action-name))
-    (with-slots (actions) appstate
-      (remhash (name-to-downcase-string action-name) actions)))
-  (:documentation ""))
+@export
+(defun del-action (action-name &optional app)
+  (declare (type (or string symbol) action-name))
+  (remhash (name-to-downcase-string action-name) (actions (find-app app))))
 
 (defvar *action-finish* nil)
 (defvar *jump-chain* nil)
 
-(defmacro defaction (name reqstate-symbol appstate lambda-list &body body)
-  `(add-action ,appstate
-               (make-action ,name ,reqstate-symbol ,lambda-list
+@export
+(defmacro defaction (name rps lambda-list &body body)
+  `(add-action (make-action ,name ,rps ,lambda-list
                  ,@body)))
+@export
+(defmacro defaction* (name rps app lambda-list &body body)
+  `(add-action (make-action ,name ,rps ,lambda-list
+                 ,@body)
+               ,app))
 
-(defmacro make-action (name reqstate-symbol lambda-list &body body)
+@export
+(defmacro make-action (name rps-sym lambda-list &body body)
   (declare (type (or symbol string) name)
-           (type symbol reqstate-symbol)
+           (type symbol rps-sym)
 	   (type list lambda-list))
   (let ((action-block-name (gensym "ACTIONBLOCK")))
     `(make-instance
-      'brac-action
+      'action
       :name ',(name-to-downcase-string name)
-      :callable (lambda ,(cons reqstate-symbol lambda-list)
-                  (let ((*current-rs* ,reqstate-symbol)
+      :callable (lambda ,(cons rps-sym lambda-list)
+                  (let ((*current-rs* ,rps-sym)
                         (*action-finish* :pass)
                         *jump-chain*)
                     (block ,action-block-name
@@ -101,21 +95,21 @@
       :source-file (load-time-value
                     (or #.*compile-file-pathname* *load-pathname*)))))
 
-(defgeneric load-builtin-actions (appstate)
-  (:method ((appstate brac-appstate))
-    (defaction nop rs appstate ()
+(defgeneric load-builtin-actions (app)
+  (:method ((app brac-app))
+    (defaction* nop rs app ()
       nil)
 
-    (defaction send-test rs appstate ()
+    (defaction* send-test rs app ()
       ;;A tiny built-in action for testing purposes.
       (finish :send)
       (setf (response-status-code rs) 200)
       (setf (res-hdr :content-type) "text/plain; charset=UTF-8")
       (setf (response-content rs)
-	    (format nil "Test action reporting.~%appstate: ~W~%reqstate: ~W~%~A~%"
-		    appstate rs (format-request rs))))
+	    (format nil "Test action reporting.~%app: ~W~%request processing state: ~W~%~A~%"
+                    app rs (format-request rs))))
 
-    (defaction send-hello rs appstate ()
+    (defaction* send-hello rs app ()
       ;;Outputs a short greetings page.
       (finish :send)
       (setf (response-status-code rs) 200)
@@ -125,7 +119,7 @@
 		    (:html (:head (:title "braculon:hello"))
 			   (:body (:p "Hello! Things seem to work here.")))))))
 
-    (defaction send-404 rs appstate ()
+    (defaction* send-404 rs app ()
       ;;Outputs a short greetings page.
       (finish :send)
       (setf (response-status-code rs) 400)
@@ -136,30 +130,35 @@
 			   (:body (:h2 "404 Not Found")
                                   (:p "Unknown URL.")))))))
 
-    (defaction send-file rs appstate (pathname)
+    (defaction* send-file rs app (pathname)
       (finish :send)
       (setf (response-content rs)
             (lack.app.file:make-app
              :file (getf (rq-data rs) :filename)
              :root (or pathname
                        (uiop:merge-pathnames* #p"static/" ;;TODO no magic
-                                              (root-path appstate))))))
+                                              (root-path app))))))
 
-    (defaction drop rs appstate ()
+    (defaction* drop rs app ()
       (finish :drop))
 
     t)
   (:documentation ""))
 
 (defun perform (rs action-spec)
-  (etypecase action-spec
-    (string
-     (funcall (callable (get-action (appstate rs) action-spec))
-              rs))
-    (symbol
-     (funcall (callable (get-action (appstate rs) action-spec))
-              rs))
-    (cons
-     (apply (callable (get-action (appstate rs) (first action-spec)))
-            rs
-            (rest action-spec)))))
+  (flet ((call-if-found ()
+           (let ((cnd (get-action (app rs) action-spec)))
+             (if cnd
+                 (funcall (callable cnd) rs)
+                 (error "Action ~W not found." action-spec)))))
+    (etypecase action-spec
+      (string
+       (call-if-found))
+      (symbol
+       (call-if-found))
+      (cons
+       (let ((cnd (get-action (app rs) (first action-spec)))
+             (args (last action-spec)))
+         (if cnd
+             (apply (callable cnd) rs args)
+             (error "Action ~W not found." (first action-spec))))))))
