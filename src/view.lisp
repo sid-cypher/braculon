@@ -137,7 +137,7 @@
 			       deps))
 		 (apply ren-fun rps d-values))))
 	  (setf result (dep-call-results view)))
-	(setf (response-content rps) result)))))
+	(setf (res-content rps) result)))))
 
 ;;TODO faster typechecking, better rps data structure
 (defun valid-response-p (clack-response-form)

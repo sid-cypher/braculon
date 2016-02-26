@@ -33,8 +33,10 @@
 
 ;; TODO hooks, log failures and warnings, no-overwrite option
 @export
-(defun get-chain (chain-name &optional app)
-  (declare (type (or string symbol) chain-name))
+(defun get-chain (&optional chain-name app)
+  (declare (type (or string symbol null) chain-name))
+  (setf app (or app (find-app)))
+  (setf chain-name (or chain-name (starting-chain app)))
   (gethash (name-to-downcase-string chain-name) (chains (find-app app))))
 
 (defun add-chain (chain &optional app)
@@ -51,7 +53,7 @@
   (unless chain-name
     (setf chain-name (starting-chain (app rs))))
   (let ((max-hops (max-chain-hops (app rs)))
-        (chain (get-chain (app rs) chain-name))
+        (chain (get-chain chain-name (app rs)))
         skip-rule permission-to-send)
     (unless chain
       (error "Chain ~W not found." chain-name))
@@ -141,3 +143,11 @@
     (setf (rules chain) (append (rules chain)
                                 (list rule)))
     (incf (chain-length chain))))
+
+@export
+(defun chain-ensure-rule (rule &key ins-index chain-name app)
+  ;;TODO: append/insert rule to chain if not present
+  (let ((chain (get-chain (or chain-name
+                              (starting-chain (find-app app)))
+                          app)))
+    nil))

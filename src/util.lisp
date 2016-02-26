@@ -44,16 +44,25 @@
 		 (subseq matchpath 0 (1- mplen))
 		 matchpath))))
 
+(defun strip-leading-slashes (pathstr)
+  (declare (type string pathstr))
+  (let (char)
+    (dotimes (i (length pathstr))
+      (setf char (aref pathstr i))
+      (when (not (or (char= #\/ char)
+                     (char= #\\ char)))
+        (return (subseq pathstr i))))))
+
 ;;TODO: use local-time
 (defmacro with-decoded-timestamp
     (timestamp (&key sec min h day mon year dweek dst-p tz) &body body)
   (let ((time-unit-symbols
-	 (list
-	  (or sec 'sec) (or min 'min)
-	  (or h 'h) (or day 'day)
-	  (or mon 'mon) (or year 'year)
-	  (or dweek 'dweek) (or dst-p 'dst-p)
-	  (or tz 'tz))))
+          (list
+           (or sec 'sec) (or min 'min)
+           (or h 'h) (or day 'day)
+           (or mon 'mon) (or year 'year)
+           (or dweek 'dweek) (or dst-p 'dst-p)
+           (or tz 'tz))))
     `(multiple-value-bind ,time-unit-symbols (decode-universal-time ,timestamp)
        (declare (ignorable ,@time-unit-symbols))
        ,@body)))

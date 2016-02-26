@@ -74,41 +74,35 @@
           (string-and-slash= path (gethash :path-info (request rqs)))
           (string= path (gethash :path-info (request rqs)))))
 
-    ;; ===old===
-    #+nil(destructuring-bind (&key folder url-prefix data) options
-	   (unless (stringp url-prefix)
-	     ;; TODO: log config error - url-prefix not a string
-	     (setf url-prefix nil))
-	   (unless (pathnamep folder) ;; TODO as well
-	     (setf folder nil))
-	   (let ((static-files (uiop:directory-files
-				(if folder
-				    (merge-pathnames folder (static-content-path app))
-				    (static-content-path app))))
-		 (prefix (or url-prefix "/"))
-		 matchp)
-	     (setf (condition-data req) nil)
-	     (loop for file in static-files
-                   while (not matchp) do
-                     ;; trailing slash :deny \(later :allow, :require)
-                     (when (string= (url-req-path-name req)
-                                    (cat prefix (file-namestring file)))
-                       (setf (condition-data req) (list :file file
-                                                        :data data))
-                       (setf matchp t)))
-	     (when matchp
-	       "file-contents")))
+    (defcondition* file rqs app (root-folder-path)
+      ;;TODO explode path into folders and file
+      ;; traverse fs with a goal instead of building a list
+      (let* ((rfp (merge-pathnames root-folder-path
+                                   (asdf:system-source-directory (app-package app))))
+             ;;TODO would absolutely move this outside defscope
+             ;; provide means to define subclassed conditions.
+             (static-files (uiop:directory-files
+                            (merge-pathnames uiop:*wild-inferiors* rfp)))
+             (url-pathname (merge-pathnames
+                            (strip-leading-slashes (rq :path-info)) rfp))
+             matchp)
+        (loop for file in static-files
+              while (not matchp) do
+                (setf matchp (pathname-match-p url-pathname file))
+                (when matchp
+                  (setf (rq-data :file-match rqs) file)))
+        matchp))
 
-    #+nil(defcondition braculon::redirect (rqs) app
+    #+nil(defcondition redirect rqs ()
            nil)
-    #+nil(defcondition braculon::masquerade (rqs) app
+    #+nil(defcondition masquerade rqs ()
            nil)
     t)
   (:documentation ""))
 
 (defun condition-check (rs condition-spec)
   (flet ((call-if-found ()
-           (let ((cnd (get-condition (app rs) condition-spec)))
+           (let ((cnd (get-condition condition-spec (app rs))))
              (if cnd
                  (funcall (callable cnd) rs)
                  (error "Condition ~W not found." condition-spec)))))
@@ -118,8 +112,8 @@
       (symbol
        (call-if-found))
       (cons
-       (let ((cnd (get-condition (app rs) (first condition-spec)))
-             (args (last condition-spec)))
+       (let ((cnd (get-condition (first condition-spec) (app rs)))
+             (args (rest condition-spec)))
          (if cnd
              (apply (callable cnd) rs args)
              (error "Condition ~W not found." (first condition-spec))))))))

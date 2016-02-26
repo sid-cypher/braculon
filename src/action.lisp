@@ -109,18 +109,18 @@
     (defaction* send-test rs app ()
       ;;A tiny built-in action for testing purposes.
       (finish :send)
-      (setf (response-status-code rs) 200)
+      (setf (res-status-code rs) 200)
       (setf (res-hdr :content-type) "text/plain; charset=UTF-8")
-      (setf (response-content rs)
+      (setf (res-content rs)
 	    (format nil "Test action reporting.~%app: ~W~%request processing state: ~W~%~A~%"
                     app rs (format-request rs))))
 
     (defaction* send-hello rs app ()
       ;;Outputs a short greetings page.
       (finish :send)
-      (setf (response-status-code rs) 200)
+      (setf (res-status-code rs) 200)
       (setf (res-hdr :content-type) "text/html; charset=UTF-8")
-      (setf (response-content rs)
+      (setf (res-content rs)
 	    (list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 		    (:html (:head (:title "braculon:hello"))
 			   (:body (:p "Hello! Things seem to work here.")))))))
@@ -128,22 +128,20 @@
     (defaction* send-404 rs app ()
       ;;Outputs a short greetings page.
       (finish :send)
-      (setf (response-status-code rs) 400)
+      (setf (res-status-code rs) 400)
       (setf (res-hdr :content-type) "text/html; charset=UTF-8")
-      (setf (response-content rs)
+      (setf (res-content rs)
 	    (list (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
 		    (:html (:head (:title "404 Not Found"))
 			   (:body (:h2 "404 Not Found")
                                   (:p "Unknown URL.")))))))
 
-    (defaction* send-file rs app (pathname)
+    (defaction* send-file rs app (&optional pathname root)
       (finish :send)
-      (setf (response-content rs)
+      (setf (res-content rs)
             (lack.app.file:make-app
-             :file (getf (rq-data rs) :filename)
-             :root (or pathname
-                       (uiop:merge-pathnames* #p"static/" ;;TODO no magic
-                                              (root-path app))))))
+             :file (or pathname (rq-data :file-match rs))
+             :root (or root #p"/tmp"))))
 
     (defaction* drop rs app ()
       (finish :drop))
@@ -153,7 +151,7 @@
 
 (defun perform (rs action-spec)
   (flet ((call-if-found ()
-           (let ((cnd (get-action (app rs) action-spec)))
+           (let ((cnd (get-action action-spec (app rs))))
              (if cnd
                  (funcall (callable cnd) rs)
                  (error "Action ~W not found." action-spec)))))
@@ -163,8 +161,8 @@
       (symbol
        (call-if-found))
       (cons
-       (let ((cnd (get-action (app rs) (first action-spec)))
-             (args (last action-spec)))
+       (let ((cnd (get-action (first action-spec) (app rs)))
+             (args (rest action-spec)))
          (if cnd
              (apply (callable cnd) rs args)
              (error "Action ~W not found." (first action-spec))))))))

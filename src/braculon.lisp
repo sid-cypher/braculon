@@ -102,8 +102,9 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 
 (defmethod print-object ((app brac-app) stream)
   (print-unreadable-object (app stream :type t :identity t)
-    (format stream "\"~A\" ~A"
+    (format stream "\"~A\" ~W ~A"
 	    (name app)
+            (port app)
 	    (if (is-running-p app) "running"
 		"stopped"))))
 
@@ -115,12 +116,12 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
 
 ;;TODO: documentation for RESPONSE-CONTENT types.
 (defun to-clack-response (rps)
-  (let ((content (response-content rps)))
+  (let ((content (res-content rps)))
     (if (functionp content)
 	(lack.component:call content (original-request rps))
 	(list
-	 (response-status-code rps)
-	 (alexandria:hash-table-plist (response-headers rps))
+	 (res-status-code rps)
+	 (alexandria:hash-table-plist (res-headers rps))
 	 (if (stringp content)
 	     (list content)
 	     content)))))

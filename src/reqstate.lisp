@@ -17,46 +17,49 @@
    (chain-hops :accessor chain-hops
                :initform 0
                :type fixnum)
-   (response-status-code :accessor response-status-code
+   (response-status-code :accessor res-status-code
 			 :initarg :status-code
 			 :initform 200
 			 :type fixnum)
-   (response-headers :accessor response-headers
+   (response-headers :accessor res-headers
 		     :initform (make-hash-table :test 'eq)
 		     :type hash-table)
-   (response-content :accessor response-content
+   (response-content :accessor res-content
 		     :initarg :response)))
 
 (defmethod print-object ((rs request-processing-state) stream)
   (print-unreadable-object (rs stream :type t)
-    (format stream "status: ~A, hops: ~A" (response-status-code rs) (chain-hops rs))))
+    (format stream "status: ~A, hops: ~A" (res-status-code rs) (chain-hops rs))))
 
 (defvar *current-rs* nil)
 
+@export
 (defun rq (key &optional (rs brac::*current-rs*))
-  (gethash (name-to-keyword key) (datastore rs)))
+  (gethash (name-to-keyword key) (request rs)))
 
-;;TODO: check if this is needed
+@export
 (defun (setf rq) (value key &optional (rs brac::*current-rs*))
-  (setf (gethash (name-to-keyword key) (datastore rs)) value))
+  (setf (gethash (name-to-keyword key) (request rs)) value))
 
-(defun rq-clear (key &optional (rs brac::*current-rs*))
-  (remhash (name-to-keyword key) (datastore rs)))
-
+@export
 (defun rq-data (key &optional (rs brac::*current-rs*))
   (gethash (name-to-keyword key) (datastore rs)))
 
-;;(defun (setf rq-data) (key value &optional (rs brac::*current-rs*))
-;;(setf (gethash (name-to-keyword key) (datastore rs)) value))
+@export
+(defun (setf rq-data) (value key &optional (rs brac::*current-rs*))
+  (setf (gethash (name-to-keyword key) (datastore rs)) value))
 
+@export
 (defun rq-data-clear (key &optional (rs brac::*current-rs*))
   (remhash (name-to-keyword key) (datastore rs)))
 
+@export
 (defun res-hdr (key &optional (rs brac::*current-rs*))
-  (gethash (name-to-downcase-string key) (response-headers rs)))
+  (gethash (name-to-downcase-string key) (res-headers rs)))
 
+@export
 (defun (setf res-hdr) (value key &optional (rs brac::*current-rs*))
-  (setf (gethash (name-to-downcase-string key) (response-headers rs)) value))
+  (setf (gethash (name-to-downcase-string key) (res-headers rs)) value))
 
 (defun format-request (rs &key (format-control "~A: ~W~%") no-headers)
   (with-output-to-string (stream)
