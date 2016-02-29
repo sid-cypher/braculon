@@ -79,9 +79,9 @@
 		0
 		(mod n 10))))
 
-;;TODO: use local-time
-(defun uptime-seconds-to-dhms (univ-time-before-now)
-  (let ((seconds (- (get-universal-time) univ-time-before-now))
+(defun seconds-to-dhms (timestamp)
+  (let ((seconds (local-time:timestamp-difference
+                  (local-time:now) timestamp))
 	minutes hours days)
     (multiple-value-bind (d s) (truncate seconds local-time:+seconds-per-day+)
       (setf days d

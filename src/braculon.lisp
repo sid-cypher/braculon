@@ -26,18 +26,10 @@
 
 (define-constant +form-read-error+
   "Failed to extract data from file." :test #'string=)
-(define-constant +need-conf-file-arg+
-  "A filename is required to write the config file." :test #'string=)
-(define-constant +config-list-wrong-head+
-  "Config file must begin with an \"app-config\" as the first element of a list." :test #'string=)
 (define-constant +root-path-doesnt-exist+
   "Directory ~A does not exist." :test #'string=)
 (define-constant +connecting-clack+
-  "Connecting app (~A) to server via Clack.~%" :test #'string=)
-(define-constant +conf-dirs-subpaths+
-   "One or more paths in app-config do not exist or are not subpaths of root." :test #'string=)
-(define-constant +init-app-with-rootpath+
-  "Please specify the path to your app dir with the :ROOT-PATH key." :test #'string=)
+  "~%Connecting app (~A) to server via Clack.~%" :test #'string=)
 
 (defvar *registered-apps* '() "List of web apps that have been already registered.")
 (defvar *running-apps* '() "List of web apps that are running.")
@@ -185,7 +177,6 @@ You can pass an instance of this object to clack:clackup, as the necessary call 
                         (name-to-keyword npspec)))
                   *registered-apps*)))))
 
-;;TODO: use local-time
 @export
 (defun start (&key app (if-running :restart) (server :woo))
   "This function starts (or, if applicable, restarts) your application.
@@ -211,7 +202,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
 	     (when clack-result
 	       (with-slots (clack-handler launch-time is-running-p) app
 		 (setf clack-handler clack-result)
-		 (setf launch-time (get-universal-time))
+		 (setf launch-time (local-time:now))
 		 (setf is-running-p t)
 		 (push app *running-apps*)
 		 clack-result)))))
@@ -232,6 +223,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
         (when clack-handler
           (clack:stop clack-handler)
           (setf clack-handler nil)
+          (setf launch-time nil)
           (setf is-running-p nil)
           (setf *running-apps* (delete-if (lambda (an-app)
                                             (string= name (name an-app)))
@@ -283,7 +275,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
                   (if (and detailed
                            (is-running-p app))
                       (multiple-value-bind (d m h s)
-                          (uptime-seconds-to-dhms (launch-time app))
+                          (seconds-to-dhms (launch-time app))
                         (format t (mcat "~A (uptime: ~[~*~:;~D days, ~]"
                                     "~[~*~:;~D hours, ~]"
                                     "~[~*~:;~D minutes, ~]"
@@ -308,6 +300,7 @@ Unsurprisingly, if that app was not running, :IF-RUNNING has no effect."
     ;;TODO
     nil))
 
-;; TODO: when creating a new app skeleton, make sure there's a src/ folder
+;; TODO: when creating a new app skeleton, make sure there's a src-reload/ folder
 ;; where all kinds of random code can be put, whether it's extentions/redefinitions
 ;; or something that doesn't fit in the framework, stuff like that.
+;; -- get file/folder event notification support
